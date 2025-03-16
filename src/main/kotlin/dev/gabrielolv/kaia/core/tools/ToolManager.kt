@@ -1,12 +1,14 @@
 package dev.gabrielolv.kaia.core.tools
 
 
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 
 /**
  * Manages tool registration and execution
  */
-class ToolManager {
+class ToolManager(private val json: Json = Json) {
     private val tools = mutableMapOf<String, Tool>()
 
     /**
@@ -41,6 +43,19 @@ class ToolManager {
             ToolResult(
                 success = false,
                 result = "Error executing tool: ${e.message}"
+            )
+        }
+    }
+
+
+    suspend fun executeToolFromJson(name: String, parametersJson: String): ToolResult {
+        return try {
+            val parameters = json.parseToJsonElement(parametersJson).jsonObject
+            executeTool(name, parameters)
+        } catch (e: Exception) {
+            ToolResult(
+                success = false,
+                result = "Invalid JSON parameters: ${e.message}"
             )
         }
     }

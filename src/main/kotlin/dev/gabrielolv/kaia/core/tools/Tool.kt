@@ -1,10 +1,24 @@
 package dev.gabrielolv.kaia.core.tools
 
+import dev.gabrielolv.kaia.core.SchemaGenerator
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
+import kotlinx.serialization.serializer
+import kotlin.reflect.KClass
+
 
 /**
- * Represents a tool that can be called by agents
+ * Result of a tool execution
+ */
+@Serializable
+data class ToolResult(
+    val success: Boolean,
+    val result: String,
+    val metadata: JsonObject = JsonObject(emptyMap())
+)
+
+/**
+ * Tool interface with typed parameter execution support
  */
 interface Tool {
     val name: String
@@ -18,14 +32,92 @@ interface Tool {
 }
 
 /**
- * Result of a tool execution
+ * Tool implementation supporting strongly typed parameters
  */
-@Serializable
-data class ToolResult(
-    val success: Boolean,
-    val result: String,
-    val metadata: JsonObject = JsonObject(emptyMap())
-)
+
+
+/**
+ * Enhanced implementation of TypedTool with auto schema generation
+ */
+abstract class EnhancedTypedTool<T : Any>(
+    override val name: String,
+    override val description: String,
+    private val paramClass: KClass<T>,
+    private val json: Json = Json { ignoreUnknownKeys = true }
+) : Tool {
+
+    /**
+     * Execute with typed parameters
+     */
+    abstract suspend fun executeTyped(parameters: T): ToolResult
+
+    /**
+     * Auto-generated parameter schema based on the parameter class
+     */
+    override val parameterSchema: JsonObject by lazy {
+        try {
+            val serializer = json.serializersModule.serializer(paramClass.java)
+            SchemaGenerator.generateSchemaFromDescriptor(serializer.descriptor)
+        } catch (e: Exception) {
+            // Fallback to empty schema if generation fails
+            JsonObject(emptyMap())
+        }
+    }
+
+    /**
+     * Execute implementation that handles deserialization
+     */
+    override suspend fun execute(parameters: JsonObject): ToolResult {
+        return try {
+            val serializer = json.serializersModule.serializer(paramClass.java)
+            val typedParams = json.decodeFromJsonElement(serializer, parameters) as T
+            executeTyped(typedParams)
+        } catch (e: Exception) {
+            ToolResult(
+                success = false,
+                result = "Parameter deserialization failed: ${e.message}"
+            )
+        }
+    }
+}
+
+class TypedToolBuilder<T : Any>(
+    private val paramClass: KClass<T>,
+    private val json: Json = Json { ignoreUnknownKeys = true }
+) {
+    var name: String = ""
+    var description: String = ""
+    private var executor: (suspend (T) -> ToolResult)? = null
+
+    fun execute(block: suspend (T) -> ToolResult) {
+        executor = block
+    }
+
+    fun build(): Tool {
+        require(name.isNotEmpty()) { "Tool name cannot be empty" }
+        require(description.isNotEmpty()) { "Tool description cannot be empty" }
+        require(executor != null) { "Tool executor must be specified" }
+
+        return object : EnhancedTypedTool<T>(name, description, paramClass, json) {
+            override suspend fun executeTyped(parameters: T): ToolResult {
+                return executor!!.invoke(parameters)
+            }
+        }
+    }
+}
+
+/**
+ * Create a typed tool using DSL
+ */
+inline fun <reified T : Any> typedTool(
+    json: Json = Json { ignoreUnknownKeys = true },
+    block: TypedToolBuilder<T>.() -> Unit
+): Tool {
+    val builder = TypedToolBuilder<T>(T::class, json)
+    builder.block()
+    return builder.build()
+}
+
 
 /**
  * Builder for creating Tool instances
