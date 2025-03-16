@@ -1,6 +1,5 @@
 package dev.gabrielolv.kaia.core.tools
 
-
 import dev.gabrielolv.kaia.llm.LLMOptions
 import dev.gabrielolv.kaia.llm.LLMProvider
 import dev.gabrielolv.kaia.llm.LLMResponse

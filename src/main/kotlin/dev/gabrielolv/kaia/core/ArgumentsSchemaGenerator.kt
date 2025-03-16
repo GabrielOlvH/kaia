@@ -19,7 +19,6 @@ annotation class SchemaDescription(val value: String)
 /**
  * Enhanced Schema Generator with description support
  */
-@OptIn(ExperimentalSerializationApi::class)
 object SchemaGenerator {
     /**
      * Generate JSON schema for a serializable class
