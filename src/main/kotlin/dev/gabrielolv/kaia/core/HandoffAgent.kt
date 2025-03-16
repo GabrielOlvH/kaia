@@ -14,7 +14,7 @@ fun Agent.Companion.withHandoff(
     handoffManager: HandoffManager,
     conversationId: String,
     provider: LLMProvider,
-    agentDatabase: Map<String, String>,
+    agentDatabase: Map<String, String> = handoffManager.orchestrator.getAgentDatabase(),
     systemPrompt: String? = null,
     block: AgentBuilder.() -> Unit
 ): Agent {

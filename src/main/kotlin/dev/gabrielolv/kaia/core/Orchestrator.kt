@@ -28,6 +28,10 @@ class Orchestrator(
         agents.remove(agentId)
     }
 
+    fun getAgentDatabase(): Map<String, String> {
+        return agents.mapKeys { it.key }.mapValues { it.value.description }
+    }
+
     /**
      * Get an agent by ID
      */
