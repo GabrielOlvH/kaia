@@ -1,5 +1,6 @@
 package dev.gabrielolv.kaia.core
 
+import dev.gabrielolv.kaia.core.agents.Agent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async

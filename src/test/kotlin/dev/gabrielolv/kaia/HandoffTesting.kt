@@ -1,6 +1,11 @@
 package dev.gabrielolv.kaia
 
-import dev.gabrielolv.kaia.core.*
+import dev.gabrielolv.kaia.core.HandoffManager
+import dev.gabrielolv.kaia.core.Message
+import dev.gabrielolv.kaia.core.Orchestrator
+import dev.gabrielolv.kaia.core.agents.Agent
+import dev.gabrielolv.kaia.core.agents.llm
+import dev.gabrielolv.kaia.core.agents.withHandoff
 import dev.gabrielolv.kaia.core.tools.ToolManager
 import dev.gabrielolv.kaia.core.tools.ToolResult
 import dev.gabrielolv.kaia.core.tools.builders.createTool
@@ -52,7 +57,7 @@ class HandoffTesting : FunSpec({
 
         // Create LLM provider
         val openAI = LLMProvider.openAI(
-            apiKey = System.getenv("GROQ_API_KEY"),
+            apiKey = System.getenv("GROQ_KEY"),
             baseUrl = "https://api.groq.com/openai/v1",
             model = "llama-3.1-8b-instant",
             toolManager = toolManager
@@ -85,7 +90,7 @@ class HandoffTesting : FunSpec({
             description = "General customer service inquiries and routing"
         }
 
-        val billingSpecialist = Agent.withTools(
+        val billingSpecialist = Agent.llm(
             provider = openAI,
             systemPrompt = "You are in the billing department;"
         )  {
