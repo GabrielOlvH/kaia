@@ -16,7 +16,7 @@ dependencies {
     implementation(libs.arrow.fx.coroutines)
 
 
-    implementation("com.github.f4b6a3:ulid-creator:5.2.0")
+    implementation("com.github.f4b6a3:ulid-creator:5.2.3")
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.ktor.client.core)
