@@ -1,8 +1,8 @@
 package dev.gabrielolv.kaia.core
 
-import dev.gabrielolv.kaia.core.tools.ToolCallingProvider
 import dev.gabrielolv.kaia.llm.LLMOptions
 import dev.gabrielolv.kaia.llm.LLMProvider
+import dev.gabrielolv.kaia.llm.providers.ToolCallingProvider
 
 fun Agent.Companion.llm(
     provider: LLMProvider,

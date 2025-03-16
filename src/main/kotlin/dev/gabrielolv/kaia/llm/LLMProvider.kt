@@ -1,7 +1,7 @@
 package dev.gabrielolv.kaia.llm
 
-import dev.gabrielolv.kaia.core.tools.ToolCallingProvider
 import dev.gabrielolv.kaia.core.tools.ToolManager
+import dev.gabrielolv.kaia.llm.providers.ToolCallingProvider
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.engine.cio.*

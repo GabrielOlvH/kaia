@@ -1,6 +1,5 @@
 package dev.gabrielolv.kaia.core.tools
 
-
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
@@ -47,7 +46,9 @@ class ToolManager(private val json: Json = Json) {
         }
     }
 
-
+    /**
+     * Execute a tool from a JSON string of parameters
+     */
     suspend fun executeToolFromJson(name: String, parametersJson: String): ToolResult {
         return try {
             val parameters = json.parseToJsonElement(parametersJson).jsonObject

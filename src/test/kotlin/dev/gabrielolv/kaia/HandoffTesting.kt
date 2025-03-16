@@ -3,7 +3,7 @@ package dev.gabrielolv.kaia
 import dev.gabrielolv.kaia.core.*
 import dev.gabrielolv.kaia.core.tools.ToolManager
 import dev.gabrielolv.kaia.core.tools.ToolResult
-import dev.gabrielolv.kaia.core.tools.createTool
+import dev.gabrielolv.kaia.core.tools.builders.createTool
 import dev.gabrielolv.kaia.llm.LLMProvider
 import dev.gabrielolv.kaia.utils.nextThreadId
 import io.kotest.core.spec.style.FunSpec
