@@ -13,21 +13,20 @@ import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.encodeToJsonElement
-import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.*
 
 /**
  * LLM provider with tool calling capabilities
  */
-class ToolCallingProvider(
+class OpenAIToolsProvider(
     private val apiKey: String,
     private val baseUrl: String = "https://api.openai.com/v1",
     private val model: String = "gpt-4-turbo",
-    private val toolManager: ToolManager? = null
+    private val toolManager: ToolManager
 ) : LLMProvider {
+    @OptIn(ExperimentalSerializationApi::class)
     private val client = HttpClient(CIO) {
         install(ContentNegotiation) {
             json(Json {
@@ -35,6 +34,7 @@ class ToolCallingProvider(
                 explicitNulls = false
                 encodeDefaults = true
                 isLenient = true
+                namingStrategy = JsonNamingStrategy.SnakeCase
             })
         }
     }
@@ -43,8 +43,8 @@ class ToolCallingProvider(
     private data class Message(
         val role: String,
         val content: String? = null,
-        val tool_calls: List<ToolCall>? = null,
-        val tool_call_id: String? = null
+        val toolCalls: List<ToolCall>? = null,
+        val toolCallId: String? = null
     )
 
     @Serializable
@@ -79,13 +79,13 @@ class ToolCallingProvider(
         val messages: List<Message>,
         val tools: List<ToolDefinition>? = null,
         val temperature: Double = 0.7,
-        val max_tokens: Int? = null
+        val maxTokens: Int? = null
     )
 
     @Serializable
     private data class Choice(
         val message: Message,
-        val finish_reason: String
+        val finishReason: String
     )
 
     @Serializable
@@ -103,7 +103,7 @@ class ToolCallingProvider(
         messages.add(Message("user", prompt))
 
         // Convert registered tools to OpenAI format
-        val tools = toolManager?.getAllTools()?.map { tool ->
+        val tools = toolManager.getAllTools().map { tool ->
             ToolDefinition(
                 function = FunctionDefinition(
                     name = tool.name,
@@ -116,9 +116,9 @@ class ToolCallingProvider(
         val request = Request(
             model = model,
             messages = messages,
-            tools = tools?.takeIf { it.isNotEmpty() },
+            tools = tools.takeIf { it.isNotEmpty() },
             temperature = options.temperature,
-            max_tokens = options.maxTokens
+            maxTokens = options.maxTokens
         )
 
         // Make the initial request
@@ -131,10 +131,8 @@ class ToolCallingProvider(
         val message = response.choices.firstOrNull()?.message
 
         // If the model wants to call tools, handle those calls
-        val toolCalls = message?.tool_calls
+        val toolCalls = message?.toolCalls
         if (!toolCalls.isNullOrEmpty()) {
-            assert(toolManager != null) { "Received tool call but toolManager is null!" }
-            toolManager!!
             // Execute tool calls in parallel
             val toolResults = toolCalls.map { toolCall ->
                 async {
@@ -148,7 +146,7 @@ class ToolCallingProvider(
                     Message(
                         role = "tool",
                         content = result.result,
-                        tool_call_id = toolCall.id
+                        toolCallId = toolCall.id
                     )
                 }
             }.map { it.await() }
@@ -163,9 +161,9 @@ class ToolCallingProvider(
             val followUpRequest = Request(
                 model = model,
                 messages = finalMessages,
-                tools = tools!!.takeIf { it.isNotEmpty() },
+                tools = tools.takeIf { it.isNotEmpty() },
                 temperature = options.temperature,
-                max_tokens = options.maxTokens
+                maxTokens = options.maxTokens
             )
 
             val followUpResponse: Response = client.post("$baseUrl/chat/completions") {

@@ -2,7 +2,8 @@ package dev.gabrielolv.kaia.llm
 
 import dev.gabrielolv.kaia.core.tools.ToolManager
 import dev.gabrielolv.kaia.llm.providers.CustomProvider
-import dev.gabrielolv.kaia.llm.providers.ToolCallingProvider
+import dev.gabrielolv.kaia.llm.providers.OpenAIProvider
+import dev.gabrielolv.kaia.llm.providers.OpenAIToolsProvider
 
 interface LLMProvider {
     /**
@@ -19,7 +20,12 @@ interface LLMProvider {
             baseUrl: String = "https://api.openai.com/v1",
             model: String = "gpt-4-turbo",
             toolManager: ToolManager? = null
-        ): ToolCallingProvider = ToolCallingProvider(apiKey, baseUrl, model, toolManager)
+        ): LLMProvider = if (toolManager != null) OpenAIToolsProvider(
+            apiKey,
+            baseUrl,
+            model,
+            toolManager
+        ) else OpenAIProvider(apiKey, baseUrl, model)
 
         /**
          * Create a custom LLM provider
@@ -32,5 +38,3 @@ interface LLMProvider {
         ): LLMProvider = CustomProvider(url, headers, requestTransformer, responseTransformer)
     }
 }
-
-
