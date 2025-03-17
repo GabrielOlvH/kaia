@@ -6,7 +6,7 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * Manages handoffs between agents
  */
-class HandoffManager(val orchestrator: Orchestrator, val handoffAgentId: String) {
+class HandoffManager(val orchestrator: Orchestrator, private val handoffAgentId: String) {
     private val conversations = ConcurrentHashMap<String, Conversation>()
 
     /**

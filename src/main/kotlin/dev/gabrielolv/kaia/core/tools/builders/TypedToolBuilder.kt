@@ -1,7 +1,8 @@
-package dev.gabrielolv.kaia.core.tools.typed
+package dev.gabrielolv.kaia.core.tools.builders
 
 import dev.gabrielolv.kaia.core.tools.Tool
 import dev.gabrielolv.kaia.core.tools.ToolResult
+import dev.gabrielolv.kaia.core.tools.typed.TypedTool
 import kotlinx.serialization.json.Json
 import kotlin.reflect.KClass
 

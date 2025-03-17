@@ -1,6 +1,5 @@
 package dev.gabrielolv.kaia.core.tools.typed
 
-import dev.gabrielolv.kaia.core.SchemaGenerator
 import dev.gabrielolv.kaia.core.tools.Tool
 import dev.gabrielolv.kaia.core.tools.ToolResult
 import kotlinx.serialization.json.Json

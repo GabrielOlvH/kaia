@@ -1,4 +1,4 @@
-package dev.gabrielolv.kaia.core
+package dev.gabrielolv.kaia.core.tools.typed
 
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialInfo
@@ -14,7 +14,7 @@ import kotlinx.serialization.serializer
 @OptIn(ExperimentalSerializationApi::class)
 @SerialInfo
 @Target(AnnotationTarget.PROPERTY, AnnotationTarget.CLASS)
-annotation class SchemaDescription(val value: String)
+annotation class Desc(val value: String)
 
 /**
  * Enhanced Schema Generator with description support
@@ -39,7 +39,7 @@ object SchemaGenerator {
             descriptor.annotations
         }
 
-        return annotations.filterIsInstance<SchemaDescription>().firstOrNull()?.value
+        return annotations.filterIsInstance<Desc>().firstOrNull()?.value
     }
 
     /**

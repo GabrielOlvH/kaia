@@ -2,7 +2,7 @@ package dev.gabrielolv.kaia
 
 import dev.gabrielolv.kaia.core.tools.ToolManager
 import dev.gabrielolv.kaia.core.tools.ToolResult
-import dev.gabrielolv.kaia.core.tools.typed.createTool
+import dev.gabrielolv.kaia.core.tools.builders.createTool
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.maps.shouldContain
 import io.kotest.matchers.maps.shouldContainKey
