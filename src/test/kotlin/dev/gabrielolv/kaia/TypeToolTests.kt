@@ -2,7 +2,7 @@ package dev.gabrielolv.kaia
 
 import dev.gabrielolv.kaia.core.tools.ToolManager
 import dev.gabrielolv.kaia.core.tools.ToolResult
-import dev.gabrielolv.kaia.core.tools.typedTool
+import dev.gabrielolv.kaia.core.tools.builders.createTool
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.maps.shouldContain
 import io.kotest.matchers.maps.shouldContainKey
@@ -25,7 +25,7 @@ class TypedToolTest : FunSpec({
 
         test("Create and execute typed tool with DSL") {
             // Create tool using DSL
-            val calculatorTool = typedTool<CalculatorParams> {
+            val calculatorTool = createTool<CalculatorParams> {
                 name = "calculator"
                 description = "Performs basic arithmetic calculations"
 
@@ -68,7 +68,7 @@ class TypedToolTest : FunSpec({
         }
 
         test("Handle errors in typed tool execution") {
-            val calculatorTool = typedTool<CalculatorParams> {
+            val calculatorTool = createTool<CalculatorParams> {
                 name = "calculator"
                 description = "Performs basic arithmetic calculations"
 
@@ -111,7 +111,7 @@ class TypedToolTest : FunSpec({
         }
 
         test("Return error for invalid parameters") {
-            val calculatorTool = typedTool<CalculatorParams> {
+            val calculatorTool = createTool<CalculatorParams> {
                 name = "calculator"
                 description = "Performs basic arithmetic calculations"
 
@@ -150,7 +150,7 @@ class TypedToolTest : FunSpec({
             val toolManager = ToolManager()
 
             // Create a typed tool
-            val weatherTool = typedTool<WeatherParams> {
+            val weatherTool = createTool<WeatherParams> {
                 name = "weather"
                 description = "Get weather information"
 
@@ -188,7 +188,7 @@ class TypedToolTest : FunSpec({
         test("Execute tool from JSON string") {
             val toolManager = ToolManager()
 
-            val weatherTool = typedTool<WeatherParams> {
+            val weatherTool = createTool<WeatherParams> {
                 name = "weather"
                 description = "Get weather information"
 
@@ -230,7 +230,7 @@ class TypedToolTest : FunSpec({
         )
 
         test("Handle complex nested parameters") {
-            val orderTool = typedTool<OrderParams> {
+            val orderTool = createTool<OrderParams> {
                 name = "create_order"
                 description = "Create a new order"
 
