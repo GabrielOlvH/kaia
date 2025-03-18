@@ -2,6 +2,8 @@ package dev.gabrielolv.kaia.core.tools.builders
 
 import dev.gabrielolv.kaia.core.tools.Tool
 import dev.gabrielolv.kaia.core.tools.ToolResult
+import dev.gabrielolv.kaia.core.tools.typed.ParamsClass
+import dev.gabrielolv.kaia.core.tools.typed.ParamsInstance
 import dev.gabrielolv.kaia.core.tools.typed.TypedTool
 import kotlinx.serialization.json.Json
 import kotlin.reflect.KClass
@@ -9,15 +11,15 @@ import kotlin.reflect.KClass
 /**
  * Builder for creating typed tool instances
  */
-class TypedToolBuilder<T : Any>(
-    private val paramClass: KClass<T>,
+class TypedToolBuilder<T : ParamsClass>(
+    private val paramsClass: KClass<T>,
     private val json: Json = Json { ignoreUnknownKeys = true }
 ) {
     var name: String = ""
     var description: String = ""
-    private var executor: (suspend (T) -> ToolResult)? = null
+    private var executor: (suspend (ParamsInstance) -> ToolResult)? = null
 
-    fun execute(block: suspend (T) -> ToolResult) {
+    fun execute(block: suspend (ParamsInstance) -> ToolResult) {
         executor = block
     }
 
@@ -26,8 +28,8 @@ class TypedToolBuilder<T : Any>(
         require(description.isNotEmpty()) { "Tool description cannot be empty" }
         require(executor != null) { "Tool executor must be specified" }
 
-        return object : TypedTool<T>(name, description, paramClass, json) {
-            override suspend fun executeTyped(parameters: T): ToolResult {
+        return object : TypedTool<T>(name, description, paramsClass, json) {
+            override suspend fun executeTyped(parameters: ParamsInstance): ToolResult {
                 return executor!!.invoke(parameters)
             }
         }
@@ -37,11 +39,11 @@ class TypedToolBuilder<T : Any>(
 /**
  * Create a typed tool using DSL
  */
-inline fun <reified T : Any> createTool(
+inline fun <reified T : ParamsClass> createTool(
     json: Json = Json { ignoreUnknownKeys = true },
     block: TypedToolBuilder<T>.() -> Unit
 ): Tool {
-    val builder = TypedToolBuilder<T>(T::class, json)
+    val builder = TypedToolBuilder(T::class, json)
     builder.block()
     return builder.build()
 }
