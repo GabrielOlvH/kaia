@@ -1,6 +1,6 @@
 plugins {
-    kotlin("jvm") version "2.1.10"
-    alias(libs.plugins.kotlin.plugin.serialization)
+    kotlin("jvm") version libs.versions.kotlin.get()
+    kotlin("plugin.serialization") version libs.versions.kotlin.get()
 }
 
 group = "dev.gabrielolv"
@@ -15,8 +15,8 @@ dependencies {
     implementation(libs.arrow.core)
     implementation(libs.arrow.fx.coroutines)
 
-
-    implementation("com.github.f4b6a3:ulid-creator:5.2.3")
+    // Additional dependencies
+    implementation(libs.ulid.creator)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.ktor.client.core)
@@ -24,6 +24,10 @@ dependencies {
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.ktor.client.cio.jvm)
+    implementation(libs.kgraphql)
+    implementation(libs.exposed.core)
+    implementation(libs.exposed.dao)
+    implementation(libs.exposed.jdbc)
 
     // Test dependencies
     testImplementation(libs.kotest.runner.junit5)
@@ -31,7 +35,6 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
 }
-
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
 }

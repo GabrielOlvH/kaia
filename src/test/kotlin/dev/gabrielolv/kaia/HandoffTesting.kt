@@ -77,12 +77,6 @@ class HandoffTesting : FunSpec({
             handoffManager = handoffManager,
             conversationId = conversationId,
             provider = openAI,
-            agentDatabase = mapOf(
-                "customer_service" to "General customer service inquiries and routing",
-                "billing_specialist" to "Handles billing, payments, and subscription inquiries",
-                "tech_support" to "Handles technical issues and troubleshooting",
-                "sales_rep" to "Handles product inquiries, upgrades, and new purchases"
-            ),
             systemPrompt = "You are a customer service representative. Be polite and helpful."
         ) {
             id = "customer_service"
@@ -107,13 +101,6 @@ class HandoffTesting : FunSpec({
             id = "tech_support"
             name = "Tech Support"
             description = "Handles technical issues and troubleshooting"
-            processor = { message ->
-                Message(
-                    sender = "tech_support",
-                    recipient = message.sender,
-                    content = "Tech support here. I'll help troubleshoot your issue with: ${message.content}"
-                )
-            }
         }
 
         val salesRep = Agent.llm(
@@ -123,13 +110,6 @@ class HandoffTesting : FunSpec({
             id = "sales_rep"
             name = "Sales Representative"
             description = "Handles product inquiries, upgrades, and new purchases"
-            processor = { message ->
-                Message(
-                    sender = "sales_rep",
-                    recipient = message.sender,
-                    content = "This is sales. I can help you with your interest in our products: ${message.content}"
-                )
-            }
         }
 
         // Register all agents with the orchestrator
