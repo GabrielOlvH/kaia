@@ -10,7 +10,7 @@ data class Property<T>(
     var isNestedObject: Boolean = false,
     var isList: Boolean = false,
     var isComplexList: Boolean = false,
-    var paramsClass: KClass<out ParamsClass>? = null,
+    var toolParameters: KClass<out ToolParameters>? = null,
     var description: String? = null
 ) {
     fun withDescription(desc: String): Property<T> {

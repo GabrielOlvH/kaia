@@ -1,6 +1,6 @@
 package dev.gabrielolv.kaia.core.tools.typed.validation
 
-import dev.gabrielolv.kaia.core.tools.typed.ParamsInstance
+import dev.gabrielolv.kaia.core.tools.typed.ToolParametersInstance
 
 interface ValidationRule {
     /**
@@ -8,7 +8,7 @@ interface ValidationRule {
      * @param instance The parameter instance containing values
      * @return ValidationResult indicating if validation passed
      */
-    fun validate(instance: ParamsInstance): ValidationResult
+    fun validate(instance: ToolParametersInstance): ValidationResult
 
     /**
      * Get the name of the property this rule validates

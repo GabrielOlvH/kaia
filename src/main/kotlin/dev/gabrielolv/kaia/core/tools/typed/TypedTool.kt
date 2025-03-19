@@ -9,7 +9,7 @@ import kotlin.reflect.KClass
 /**
  * Enhanced implementation of Tool with typed parameters and auto schema generation
  */
-abstract class TypedTool<T : ParamsClass>(
+abstract class TypedTool<T : ToolParameters>(
     override val name: String,
     override val description: String,
     private val paramsClass: KClass<T>,
@@ -19,13 +19,13 @@ abstract class TypedTool<T : ParamsClass>(
     /**
      * Execute with typed parameters
      */
-    abstract suspend fun executeTyped(parameters: ParamsInstance): ToolResult
+    abstract suspend fun executeTyped(parameters: ToolParametersInstance): ToolResult
 
     /**
      * Auto-generated parameter schema based on the parameter class
      */
     override val parameterSchema: JsonObject by lazy {
-        ParamsClass.getInstance(paramsClass).getSchema()
+        ToolParameters.getInstance(paramsClass).getSchema()
     }
 
     /**
@@ -33,7 +33,7 @@ abstract class TypedTool<T : ParamsClass>(
      */
     override suspend fun execute(parameters: JsonObject): ToolResult {
         return try {
-            val instance = ParamsInstance(paramsClass).parseFromJson(parameters)
+            val instance = ToolParametersInstance(paramsClass).parseFromJson(parameters)
             val validationRes = instance.validate()
             if (!validationRes.isValid) {
                 return ToolResult(false, "Validation failed", validationErrors = validationRes.errors)

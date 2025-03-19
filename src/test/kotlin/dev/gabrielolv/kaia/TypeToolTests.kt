@@ -3,8 +3,8 @@ package dev.gabrielolv.kaia
 import dev.gabrielolv.kaia.core.tools.ToolManager
 import dev.gabrielolv.kaia.core.tools.ToolResult
 import dev.gabrielolv.kaia.core.tools.builders.createTool
-import dev.gabrielolv.kaia.core.tools.typed.ParamsClass
-import dev.gabrielolv.kaia.core.tools.typed.ParamsInstance
+import dev.gabrielolv.kaia.core.tools.typed.ToolParameters
+import dev.gabrielolv.kaia.core.tools.typed.ToolParametersInstance
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.maps.shouldContain
 import io.kotest.matchers.maps.shouldContainKey
@@ -12,10 +12,11 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.*
-object NestedConversionParams : ParamsClass() {
+
+object NestedConversionParams : ToolParameters() {
     val nestedString = string("nestedString").withDescription("Nested string")
 }
-object NestedNullableParams : ParamsClass() {
+object NestedNullableParams : ToolParameters() {
     val nestedRequired = string("nestedRequired").withDescription("Required nested field")
     val nestedNullable = string("nestedNullable", null).withDescription("Nullable nested field")
 
@@ -24,7 +25,7 @@ object NestedNullableParams : ParamsClass() {
     }
 }
 
-object NullableParams : ParamsClass() {
+object NullableParams : ToolParameters() {
     val requiredField = string("requiredField").withDescription("This field is required")
     val nullableField = string("nullableField", null).withDescription("This field can be null")
     val nestedObject = obj("nestedObject", NestedNullableParams::class, null)
@@ -34,7 +35,7 @@ object NullableParams : ParamsClass() {
         required(requiredField)
     }
 }
-object ConversionParams : ParamsClass() {
+object ConversionParams : ToolParameters() {
     val stringField = string("stringField").withDescription("String field")
     val intField = int("intField").withDescription("Integer field")
     val nestedField = obj("nestedField", NestedConversionParams::class)
@@ -46,7 +47,7 @@ object ConversionParams : ParamsClass() {
 }
 
 
-object PaymentParams : ParamsClass() {
+object PaymentParams : ToolParameters() {
     val amount = double("amount").withDescription("Payment amount")
     val currency = string("currency", "USD").withDescription("Payment currency")
     val method = string("method").withDescription("Payment method (credit, debit, bank)")
@@ -69,7 +70,7 @@ object PaymentParams : ParamsClass() {
 }
 
 // Define a deeply nested structure
-object DimensionsParams : ParamsClass() {
+object DimensionsParams : ToolParameters() {
     val length = double("length").withDescription("Length in cm")
     val width = double("width").withDescription("Width in cm")
     val height = double("height").withDescription("Height in cm")
@@ -79,7 +80,7 @@ object DimensionsParams : ParamsClass() {
     }
 }
 
-object ProductDetails : ParamsClass() {
+object ProductDetails : ToolParameters() {
     val sku = string("sku").withDescription("Product SKU")
     val dimensions = obj("dimensions", DimensionsParams::class).withDescription("Product dimensions")
 
@@ -88,7 +89,7 @@ object ProductDetails : ParamsClass() {
     }
 }
 
-object ComplexOrderItemParams : ParamsClass() {
+object ComplexOrderItemParams : ToolParameters() {
     val name = string("name").withDescription("Item name")
     val quantity = int("quantity").withDescription("Quantity of items")
     val price = double("price").withDescription("Price per item")
@@ -101,7 +102,7 @@ object ComplexOrderItemParams : ParamsClass() {
     }
 }
 
-object ComplexOrderParams : ParamsClass() {
+object ComplexOrderParams : ToolParameters() {
     val customerId = string("customerId").withDescription("Customer identifier")
     val items = objectList("items", ComplexOrderItemParams::class).withDescription("List of order items")
 
@@ -111,7 +112,7 @@ object ComplexOrderParams : ParamsClass() {
 }
 
 // Define the item parameters
-object OrderItemParams : ParamsClass() {
+object OrderItemParams : ToolParameters() {
     val name = string("name").withDescription("Item name")
     val quantity = int("quantity").withDescription("Quantity of items")
     val price = double("price").withDescription("Price per item")
@@ -124,7 +125,7 @@ object OrderItemParams : ParamsClass() {
 }
 
 // Define the address parameters
-object AddressParams : ParamsClass() {
+object AddressParams : ToolParameters() {
     val street = string("street").withDescription("Street address")
     val city = string("city").withDescription("City name")
     val zipCode = string("zipCode").withDescription("ZIP/Postal code")
@@ -135,7 +136,7 @@ object AddressParams : ParamsClass() {
     }
 }
 
-object OrderParams : ParamsClass() {
+object OrderParams : ToolParameters() {
     val customerId = string("customerId").withDescription("Customer identifier")
     val items = objectList("items", OrderItemParams::class).withDescription("List of order items")
     val address = obj("address", AddressParams::class).withDescription("Delivery address details")
@@ -146,7 +147,7 @@ object OrderParams : ParamsClass() {
 
     }
 }
-object CalculatorParams : ParamsClass() {
+object CalculatorParams : ToolParameters() {
     val operation = string("operation").withDescription("The operation to be executed")
     val a = double("a").withDescription("The first operand")
     val b = double("b").withDescription("The second operand")
@@ -157,7 +158,7 @@ object CalculatorParams : ParamsClass() {
     }
 }
 
-object WeatherParams : ParamsClass() {
+object WeatherParams : ToolParameters() {
     val location = string("location").withDescription("The location to get weather for")
     val units = string("units", "metric").withDescription("The units to use (metric or imperial)")
 
@@ -854,11 +855,11 @@ class TypedToolTest : FunSpec({
         test("Converting between JSON formats") {
 
             // Create a params instance
-            val params = ParamsInstance(ConversionParams::class)
+            val params = ToolParametersInstance(ConversionParams::class)
             params[ConversionParams.stringField] = "test"
             params[ConversionParams.intField] = 42
 
-            val nestedParams = ParamsInstance(NestedConversionParams::class)
+            val nestedParams = ToolParametersInstance(NestedConversionParams::class)
             nestedParams[NestedConversionParams.nestedString] = "nested value"
             params[ConversionParams.nestedField] = nestedParams
 
@@ -867,8 +868,8 @@ class TypedToolTest : FunSpec({
             val jsonString = params.toJsonString()
 
             // Create a new instance from the JSON
-            val newParams = ParamsInstance(ConversionParams::class).parseFromJson(jsonObject)
-            val stringParams = ParamsInstance(ConversionParams::class).parseFromJsonString(jsonString)
+            val newParams = ToolParametersInstance(ConversionParams::class).parseFromJson(jsonObject)
+            val stringParams = ToolParametersInstance(ConversionParams::class).parseFromJsonString(jsonString)
 
             // Verify values are preserved
             newParams[ConversionParams.stringField] shouldBe "test"

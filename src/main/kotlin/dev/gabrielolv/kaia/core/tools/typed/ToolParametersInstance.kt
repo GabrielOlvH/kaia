@@ -12,9 +12,9 @@ import kotlin.reflect.KClass
 /**
  * Represents an instance of parameters with values, similar to Exposed's Entity
  */
-class ParamsInstance(private val paramsClass: KClass<out ParamsClass>) {
+class ToolParametersInstance(private val toolParameters: KClass<out ToolParameters>) {
     private val values = mutableMapOf<Property<*>, Any?>()
-    private val paramsClassInstance = ParamsClass.getInstance(paramsClass)
+    private val toolParametersInstance = ToolParameters.getInstance(toolParameters)
 
     /**
      * Get a property value using indexing operator
@@ -53,7 +53,7 @@ class ParamsInstance(private val paramsClass: KClass<out ParamsClass>) {
         val errors = mutableListOf<ValidationError>()
 
         // Validate current level
-        for (validation in paramsClassInstance.getValidations()) {
+        for (validation in toolParametersInstance.getValidations()) {
             val result = validation.validate(this)
             if (!result.isValid) {
                 errors.addAll(result.errors)
@@ -71,13 +71,13 @@ class ParamsInstance(private val paramsClass: KClass<out ParamsClass>) {
     }
 
     private fun validateNestedObjects(errors: MutableList<ValidationError>) {
-        paramsClassInstance.getProperties().forEach { prop ->
+        toolParametersInstance.getProperties().forEach { prop ->
             when {
                 // Validate single nested object
                 prop.isNestedObject -> {
                     // Only validate if the property has a value
                     if (has(prop)) {
-                        val nestedObj = getOrNull(prop) as? ParamsInstance
+                        val nestedObj = getOrNull(prop) as? ToolParametersInstance
                         if (nestedObj != null) {
                             val nestedResult = nestedObj.validate()
                             if (!nestedResult.isValid) {
@@ -96,7 +96,7 @@ class ParamsInstance(private val paramsClass: KClass<out ParamsClass>) {
                     if (has(prop)) {
                         val list = getOrNull(prop) as? List<*> ?: emptyList<Any>()
                         list.forEachIndexed { index, item ->
-                            if (item is ParamsInstance) {
+                            if (item is ToolParametersInstance) {
                                 val itemResult = item.validate()
                                 if (!itemResult.isValid) {
                                     // Prefix property names with parent property name and index
@@ -118,8 +118,8 @@ class ParamsInstance(private val paramsClass: KClass<out ParamsClass>) {
     /**
      * Parse from JsonObject
      */
-    fun parseFromJson(json: JsonObject): ParamsInstance {
-        paramsClassInstance.getProperties().forEach { prop ->
+    fun parseFromJson(json: JsonObject): ToolParametersInstance {
+        toolParametersInstance.getProperties().forEach { prop ->
             val element = json[prop.name] ?: return@forEach
             val converted = JsonUtils.fromJsonElement(element, prop, this)
                 values[prop] = converted
@@ -130,7 +130,7 @@ class ParamsInstance(private val paramsClass: KClass<out ParamsClass>) {
     /**
      * Parse from JSON string
      */
-    fun parseFromJsonString(jsonString: String): ParamsInstance {
+    fun parseFromJsonString(jsonString: String): ToolParametersInstance {
         val json = Json.parseToJsonElement(jsonString).jsonObject
         return parseFromJson(json)
     }
@@ -141,7 +141,7 @@ class ParamsInstance(private val paramsClass: KClass<out ParamsClass>) {
     fun toJsonObject(): JsonObject {
         val map = mutableMapOf<String, JsonElement>()
 
-        paramsClassInstance.getProperties().forEach { prop ->
+        toolParametersInstance.getProperties().forEach { prop ->
             val value = getOrNull(prop)
             map[prop.name] = JsonUtils.toJsonElement(value)
         }
@@ -163,6 +163,6 @@ class ParamsInstance(private val paramsClass: KClass<out ParamsClass>) {
      * Get the schema for this params instance
      */
     fun getSchema(): JsonObject {
-        return paramsClassInstance.getSchema()
+        return toolParametersInstance.getSchema()
     }
 }

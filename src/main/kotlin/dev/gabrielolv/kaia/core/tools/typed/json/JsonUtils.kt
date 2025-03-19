@@ -1,8 +1,8 @@
 package dev.gabrielolv.kaia.core.tools.typed.json
 
-import dev.gabrielolv.kaia.core.tools.typed.ParamsClass
-import dev.gabrielolv.kaia.core.tools.typed.ParamsInstance
 import dev.gabrielolv.kaia.core.tools.typed.Property
+import dev.gabrielolv.kaia.core.tools.typed.ToolParameters
+import dev.gabrielolv.kaia.core.tools.typed.ToolParametersInstance
 import dev.gabrielolv.kaia.core.tools.typed.validation.MaxValueValidation
 import dev.gabrielolv.kaia.core.tools.typed.validation.MinValueValidation
 import dev.gabrielolv.kaia.core.tools.typed.validation.RegexValidation
@@ -20,7 +20,7 @@ object JsonUtils {
         is Number -> JsonPrimitive(value)
         is Boolean -> JsonPrimitive(value)
         is Enum<*> -> JsonPrimitive(value.name)
-        is ParamsInstance -> value.toJsonObject()
+        is ToolParametersInstance -> value.toJsonObject()
         is List<*> -> JsonArray(value.map { toJsonElement(it) })
         else -> JsonNull
     }
@@ -31,13 +31,13 @@ object JsonUtils {
     fun <T> fromJsonElement(
         element: JsonElement,
         prop: Property<T>,
-        parentInstance: ParamsInstance? = null
+        parentInstance: ToolParametersInstance? = null
     ): Any? {
         return when {
             element is JsonNull -> null
             prop.isNestedObject && element is JsonObject -> {
-                val nestedClass = prop.paramsClass ?: return null
-                val nestedInstance = ParamsInstance(nestedClass)
+                val nestedClass = prop.toolParameters ?: return null
+                val nestedInstance = ToolParametersInstance(nestedClass)
                 nestedInstance.parseFromJson(element)
                 nestedInstance
             }
@@ -55,11 +55,11 @@ object JsonUtils {
     }
 
     private fun parseComplexList(element: JsonArray, prop: Property<*>): List<Any> {
-        val nestedClass = prop.paramsClass ?: return emptyList()
+        val nestedClass = prop.toolParameters ?: return emptyList()
 
         return element.mapNotNull { item ->
             if (item is JsonObject) {
-                val nestedInstance = ParamsInstance(nestedClass)
+                val nestedInstance = ToolParametersInstance(nestedClass)
                 nestedInstance.parseFromJson(item)
                 nestedInstance
             } else {
@@ -119,9 +119,9 @@ object JsonUtils {
 
     private fun JsonObjectBuilder.buildNestedObjectSchema(prop: Property<*>) {
         put("type", "object")
-        val nestedClass = prop.paramsClass
+        val nestedClass = prop.toolParameters
         if (nestedClass != null) {
-            val nestedInstance = ParamsClass.getInstance(nestedClass)
+            val nestedInstance = ToolParameters.getInstance(nestedClass)
             val nestedSchema = nestedInstance.getSchema()
             put("properties", nestedSchema["properties"] ?: JsonObject(emptyMap()))
             if (nestedSchema.containsKey("required")) {
@@ -136,9 +136,9 @@ object JsonUtils {
             if (prop.isComplexList) {
                 // Complex object items
                 put("type", "object")
-                val nestedClass = prop.paramsClass
+                val nestedClass = prop.toolParameters
                 if (nestedClass != null) {
-                    val nestedInstance = ParamsClass.getInstance(nestedClass)
+                    val nestedInstance = ToolParameters.getInstance(nestedClass)
                     val nestedSchema = nestedInstance.getSchema()
                     put("properties", nestedSchema["properties"] ?: JsonObject(emptyMap()))
                     if (nestedSchema.containsKey("required")) {

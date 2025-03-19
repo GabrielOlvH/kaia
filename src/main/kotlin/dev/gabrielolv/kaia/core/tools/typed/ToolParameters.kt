@@ -8,12 +8,12 @@ import kotlin.reflect.KClass
 /**
  * Base class for parameter definitions, similar to Exposed's Table class
  */
-abstract class ParamsClass {
+abstract class ToolParameters {
     companion object {
-        private val registry = mutableMapOf<KClass<out ParamsClass>, ParamsClass>()
+        private val registry = mutableMapOf<KClass<out ToolParameters>, ToolParameters>()
 
         @Suppress("UNCHECKED_CAST")
-        fun <T : ParamsClass> getInstance(clazz: KClass<T>): T {
+        fun <T : ToolParameters> getInstance(clazz: KClass<T>): T {
             return registry.getOrPut(clazz) {
                 clazz.objectInstance ?: error("${clazz.simpleName} must be an object")
             } as T
@@ -71,11 +71,11 @@ abstract class ParamsClass {
             type = enumClass
         }
 
-    fun <T : ParamsClass> obj(name: String, paramsClass: KClass<T>, default: (() -> ParamsInstance)? = null) =
-        registerProperty<ParamsInstance>(name) { default?.invoke() ?: ParamsInstance(paramsClass) }.apply {
-            type = ParamsInstance::class
+    fun <T : ToolParameters> obj(name: String, paramsClass: KClass<T>, default: (() -> ToolParametersInstance)? = null) =
+        registerProperty<ToolParametersInstance>(name) { default?.invoke() ?: ToolParametersInstance(paramsClass) }.apply {
+            type = ToolParametersInstance::class
             this.isNestedObject = true
-            this.paramsClass = paramsClass
+            this.toolParameters = paramsClass
         }
 
     fun <T : Any> list(name: String, itemClass: KClass<T>, default: List<T>? = null) =
@@ -85,16 +85,16 @@ abstract class ParamsClass {
             this.isList = true
         }
 
-    fun <T : ParamsClass> objectList(
+    fun <T : ToolParameters> objectList(
         name: String,
         paramsClass: KClass<T>,
-        default: List<ParamsInstance>? = null
-    ) = registerProperty<List<ParamsInstance>>(name) { default ?: emptyList() }.apply {
+        default: List<ToolParametersInstance>? = null
+    ) = registerProperty<List<ToolParametersInstance>>(name) { default ?: emptyList() }.apply {
         type = List::class
-        this.itemType = ParamsInstance::class
+        this.itemType = ToolParametersInstance::class
         this.isList = true
         this.isComplexList = true
-        this.paramsClass = paramsClass
+        this.toolParameters = paramsClass
     }
 
     // Validation API
@@ -114,7 +114,7 @@ abstract class ParamsClass {
         validations.add(RegexValidation(property, pattern))
     }
 
-    fun custom(property: Property<*>, validation: (ParamsInstance) -> Boolean, message: String) {
+    fun custom(property: Property<*>, validation: (ToolParametersInstance) -> Boolean, message: String) {
         validations.add(CustomValidation(property, validation, message))
     }
 
