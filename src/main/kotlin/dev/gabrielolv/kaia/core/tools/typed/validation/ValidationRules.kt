@@ -19,7 +19,7 @@ class RequiredValidation(private val property: Property<*>) : ValidationRule {
         }
     }
 
-    override fun getPropertyName(): String = property.name
+    fun getPropertyName(): String = property.name
 }
 
 class MinValueValidation<T : Comparable<T>>(
@@ -39,10 +39,6 @@ class MinValueValidation<T : Comparable<T>>(
             ValidationResult.valid()
         }
     }
-
-    override fun getPropertyName(): String = property.name
-
-    fun getMinValue(): T = minValue
 }
 
 class MaxValueValidation<T : Comparable<T>>(
@@ -62,10 +58,6 @@ class MaxValueValidation<T : Comparable<T>>(
             ValidationResult.valid()
         }
     }
-
-    override fun getPropertyName(): String = property.name
-
-    fun getMaxValue(): T = maxValue
 }
 
 class RegexValidation(
@@ -85,29 +77,18 @@ class RegexValidation(
             ValidationResult.valid()
         }
     }
-
-    override fun getPropertyName(): String = property.name
-
-    fun getPattern(): Regex = pattern
 }
 
 class CustomValidation(
-    private val property: Property<*>,
+    private val name: String,
     private val validation: (ToolParametersInstance) -> Boolean,
     private val message: String
 ) : ValidationRule {
     override fun validate(instance: ToolParametersInstance): ValidationResult {
-        // Skip validation if property is not set
-        if (!instance.has(property)) {
-            return ValidationResult.valid()
-        }
-
         return if (!validation(instance)) {
-            ValidationResult.invalid(property.name, message)
+            ValidationResult.invalid(name, message)
         } else {
             ValidationResult.valid()
         }
     }
-
-    override fun getPropertyName(): String = property.name
 }

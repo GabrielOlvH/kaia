@@ -9,9 +9,4 @@ interface ValidationRule {
      * @return ValidationResult indicating if validation passed
      */
     fun validate(instance: ToolParametersInstance): ValidationResult
-
-    /**
-     * Get the name of the property this rule validates
-     */
-    fun getPropertyName(): String
 }

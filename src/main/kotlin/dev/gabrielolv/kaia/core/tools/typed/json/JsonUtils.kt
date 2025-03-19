@@ -3,10 +3,6 @@ package dev.gabrielolv.kaia.core.tools.typed.json
 import dev.gabrielolv.kaia.core.tools.typed.Property
 import dev.gabrielolv.kaia.core.tools.typed.ToolParameters
 import dev.gabrielolv.kaia.core.tools.typed.ToolParametersInstance
-import dev.gabrielolv.kaia.core.tools.typed.validation.MaxValueValidation
-import dev.gabrielolv.kaia.core.tools.typed.validation.MinValueValidation
-import dev.gabrielolv.kaia.core.tools.typed.validation.RegexValidation
-import dev.gabrielolv.kaia.core.tools.typed.validation.ValidationRule
 import kotlinx.serialization.json.*
 import kotlin.reflect.KClass
 
@@ -99,17 +95,13 @@ object JsonUtils {
     /**
      * Builds a JSON schema for a property
      */
-    fun buildPropertySchema(prop: Property<*>, validations: List<ValidationRule>): JsonObject {
+    fun buildPropertySchema(prop: Property<*>): JsonObject {
         return buildJsonObject {
             when {
                 prop.isNestedObject -> buildNestedObjectSchema(prop)
                 prop.isList -> buildListSchema(prop)
                 else -> buildPrimitiveSchema(prop)
             }
-
-            // Add validation constraints to schema
-            addValidationConstraints(prop, validations)
-
             // Add description if available
             prop.description?.let {
                 put("description", JsonPrimitive(it))
@@ -179,34 +171,6 @@ object JsonUtils {
                     putJsonArray("enum") {
                         enumValues?.forEach { add(it.name) }
                     }
-                }
-            }
-        }
-    }
-
-    private fun JsonObjectBuilder.addValidationConstraints(
-        prop: Property<*>,
-        validations: List<ValidationRule>
-    ) {
-        validations.forEach { validation ->
-            if (validation.getPropertyName() == prop.name) {
-                when (validation) {
-                    is MinValueValidation<*> -> {
-                        put(
-                            "minimum",
-                            JsonPrimitive(validation.getMinValue().toString().toDoubleOrNull() ?: 0.0)
-                        )
-                    }
-                    is MaxValueValidation<*> -> {
-                        put(
-                            "maximum",
-                            JsonPrimitive(validation.getMaxValue().toString().toDoubleOrNull() ?: 0.0)
-                        )
-                    }
-                    is RegexValidation -> {
-                        put("pattern", JsonPrimitive(validation.getPattern().pattern))
-                    }
-                    // Other validation types can be added here
                 }
             }
         }

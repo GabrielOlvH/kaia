@@ -114,8 +114,8 @@ abstract class ToolParameters {
         validations.add(RegexValidation(property, pattern))
     }
 
-    fun custom(property: Property<*>, validation: (ToolParametersInstance) -> Boolean, message: String) {
-        validations.add(CustomValidation(property, validation, message))
+    fun custom(name: String, validation: (ToolParametersInstance) -> Boolean, message: String) {
+        validations.add(CustomValidation(name, validation, message))
     }
 
     fun getProperties(): List<Property<*>> = properties
@@ -127,7 +127,7 @@ abstract class ToolParameters {
         val required = mutableListOf<String>()
 
         this.properties.forEach { prop ->
-            val propertySchema = JsonUtils.buildPropertySchema(prop, validations)
+            val propertySchema = JsonUtils.buildPropertySchema(prop)
             properties[prop.name] = propertySchema
 
             // Check if property is required

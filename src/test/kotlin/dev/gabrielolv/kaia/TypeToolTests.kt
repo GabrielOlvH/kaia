@@ -58,7 +58,7 @@ object PaymentParams : ToolParameters() {
         min(amount, 0.01)
 
         // Custom validation: cardNumber is required when method is credit or debit
-        custom(method, { params ->
+        custom("method-cardNumber", { params ->
             val methodStr = params[method] as? String ?: return@custom true
             if (methodStr == "credit" || methodStr == "debit") {
                 val cardNum = params[cardNumber]
@@ -498,7 +498,7 @@ class TypedToolTest : FunSpec({
             runBlocking {
                 val result = orderTool.execute(orderJson)
                 result.success shouldBe false
-                result.result shouldBe "Validation failed"
+                result.result shouldBe "Order must contain at least one item"
             }
         }
 

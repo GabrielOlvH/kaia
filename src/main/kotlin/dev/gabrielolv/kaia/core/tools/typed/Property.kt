@@ -2,7 +2,7 @@ package dev.gabrielolv.kaia.core.tools.typed
 
 import kotlin.reflect.KClass
 
-data class Property<T>(
+ data class Property<T>(
     val name: String,
     val defaultValue: () -> T?,
     var type: KClass<*>? = null,
