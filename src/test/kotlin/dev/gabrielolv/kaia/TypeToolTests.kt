@@ -148,7 +148,7 @@ object OrderParams : ToolParameters() {
     }
 }
 object CalculatorParams : ToolParameters() {
-    val operation = string("operation").withDescription("The operation to be executed")
+    val operation = string("operation").withDescription("The operation to be executed. Can be add, subtract, multiply or divide")
     val a = double("a").withDescription("The first operand")
     val b = double("b").withDescription("The second operand")
 

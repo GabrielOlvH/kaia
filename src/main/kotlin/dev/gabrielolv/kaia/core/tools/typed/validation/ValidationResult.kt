@@ -11,8 +11,10 @@ data class ValidationResult(
 ) {
     companion object {
         fun valid() = ValidationResult(true)
+
         fun invalid(property: String, message: String) =
             ValidationResult(false, listOf(ValidationError(property, message)))
+
         fun combine(results: List<ValidationResult>): ValidationResult {
             val allErrors = results.flatMap { it.errors }
             return if (allErrors.isEmpty()) valid() else ValidationResult(false, allErrors)

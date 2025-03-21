@@ -36,7 +36,7 @@ abstract class TypedTool<T : ToolParameters>(
             val instance = ToolParametersInstance(paramsClass).parseFromJson(parameters)
             val validationRes = instance.validate()
             if (!validationRes.isValid) {
-                return ToolResult(false, "Validation failed", validationErrors = validationRes.errors)
+                return ToolResult(false, "Validation failed: " + validationRes.errors.joinToString(", ") { "${it.property}: ${it.message}" }, validationErrors = validationRes.errors)
             }
             executeTyped(instance)
         } catch (e: Exception) {

@@ -12,9 +12,6 @@ import dev.gabrielolv.kaia.core.tools.builders.createTool
 import dev.gabrielolv.kaia.llm.LLMProvider
 import dev.gabrielolv.kaia.utils.nextThreadId
 import io.kotest.core.spec.style.FunSpec
-import kotlinx.serialization.json.double
-import kotlinx.serialization.json.jsonPrimitive
-import kotlin.math.pow
 
 class HandoffTesting : FunSpec({
 
@@ -22,28 +19,19 @@ class HandoffTesting : FunSpec({
 
         val toolManager = ToolManager()
 
-        val calculatorTool = createTool {
+        val calculatorTool = createTool<CalculatorParams> {
             name = "calculator"
             description = "Performs basic arithmetic calculations"
 
-            parameters {
-                property("operation", "string", "The operation to perform (add, subtract, multiply, divide, power)", true)
-                property("a", "number", "First operand", true)
-                property("b", "number", "Second operand", true)
-            }
-
-            executor = { params ->
-                val operation = params["operation"]?.jsonPrimitive?.content ?: "add"
-                val a = params["a"]?.jsonPrimitive?.double ?: 0.0
-                val b = params["b"]?.jsonPrimitive?.double ?: 0.0
-
-                val result = when (operation) {
+            execute { params ->
+                val b = params[CalculatorParams.b]
+                val a = params[CalculatorParams.a]
+                val result = when (params[CalculatorParams.operation]) {
                     "add" -> a + b
                     "subtract" -> a - b
                     "multiply" -> a * b
                     "divide" -> if (b != 0.0) a / b else "Error: Division by zero"
-                    "power" -> a.pow(b)
-                    else -> "Unknown operation: $operation"
+                    else -> "Unknown operation: ${params[CalculatorParams.operation]}"
                 }
 
                 ToolResult(
@@ -59,7 +47,7 @@ class HandoffTesting : FunSpec({
         val openAI = LLMProvider.openAI(
             apiKey = System.getenv("GROQ_KEY"),
             baseUrl = "https://api.groq.com/openai/v1",
-            model = "llama-3.1-8b-instant",
+            model = "llama-3.3-70b-specdec",
             toolManager = toolManager
         )
 
@@ -159,7 +147,7 @@ class HandoffTesting : FunSpec({
         // Billing question that should trigger handoff
         val billingMessage = Message(
             sender = "user",
-            content = "I have a question about my last invoice. I think I was charged twice. Can you check using your calculator tool what's 10 + 10?"
+            content = "I have a question about my last invoice. I think I was charged twice. Can you check using your calculator tool what's 0 + 10?"
         )
 
         response = handoffManager.sendMessage(conversationId, billingMessage)
