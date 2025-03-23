@@ -1,9 +1,9 @@
 package dev.gabrielolv.kaia.llm.providers
 
 import dev.gabrielolv.kaia.core.tools.ToolManager
+import dev.gabrielolv.kaia.llm.LLMMessage
 import dev.gabrielolv.kaia.llm.LLMOptions
 import dev.gabrielolv.kaia.llm.LLMProvider
-import dev.gabrielolv.kaia.llm.LLMResponse
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.engine.cio.*
@@ -13,12 +13,15 @@ import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 
 /**
  * LLM provider with tool calling capabilities that supports chained tool calls
+ * using Flow to emit all messages in the conversation
  */
 class OpenAIToolsProvider(
     private val apiKey: String,
@@ -107,15 +110,35 @@ class OpenAIToolsProvider(
     /**
      * Process tool calls in parallel and return the response messages
      */
-    private suspend fun processToolCalls(toolCalls: List<ToolCall>): List<Message> = coroutineScope {
+    private suspend fun processToolCalls(
+        toolCalls: List<ToolCall>,
+        emitMessage: suspend (LLMMessage) -> Unit
+    ) = coroutineScope {
         toolCalls.map { toolCall ->
             async {
                 val functionCall = toolCall.function
                 val toolName = functionCall.name
                 val arguments = Json.parseToJsonElement(functionCall.arguments).jsonObject
 
+                // Emit tool call message
+                emitMessage(
+                    LLMMessage.ToolCallMessage(
+                        id = toolCall.id,
+                        name = toolName,
+                        arguments = arguments
+                    )
+                )
+
                 val result = toolManager.executeTool(toolName, arguments)
 
+                // Emit tool response message
+                val toolResponseMessage = LLMMessage.ToolResponseMessage(
+                    toolCallId = toolCall.id,
+                    content = result.result
+                )
+                emitMessage(toolResponseMessage)
+
+                // Return the message for the API
                 Message(
                     role = "tool",
                     content = result.result,
@@ -125,13 +148,22 @@ class OpenAIToolsProvider(
         }.map { it.await() }
     }
 
-    override suspend fun generate(prompt: String, options: LLMOptions): LLMResponse = coroutineScope {
+    /**
+     * Generate a flow of messages from the LLM
+     */
+    override fun generate(prompt: String, options: LLMOptions): Flow<LLMMessage> = channelFlow {
         val messages = mutableListOf<Message>()
 
+        // Add system message if provided
         options.systemPrompt?.let {
+            val systemMessage = LLMMessage.SystemMessage(it)
+            send(systemMessage)
             messages.add(Message("system", it))
         }
 
+        // Add user message
+        val userMessage = LLMMessage.UserMessage(prompt)
+        send(userMessage)
         messages.add(Message("user", prompt))
 
         // Convert registered tools to OpenAI format
@@ -162,35 +194,44 @@ class OpenAIToolsProvider(
         val maxIterations = 10 // Safety limit to prevent infinite loops
         var iteration = 0
 
-        while (currentMessage?.toolCalls != null && currentMessage.toolCalls!!.isNotEmpty() && iteration < maxIterations) {
-            iteration++
+        while (currentMessage != null && iteration < maxIterations) {
+            // Check if the message has tool calls
+            if (currentMessage.toolCalls != null && currentMessage.toolCalls!!.isNotEmpty()) {
+                // Add the assistant's message with tool calls to the conversation
+                currentMessages = (currentMessages + currentMessage).toMutableList()
 
-            // Add the assistant's message with tool calls to the conversation
-            currentMessages = (currentMessages + currentMessage).toMutableList()
+                // Process tool calls and get tool response messages
+                val toolResponses = processToolCalls(currentMessage.toolCalls!!) { message ->
+                    send(message)
+                }
 
-            // Process tool calls and get tool response messages
-            val toolResponses = processToolCalls(currentMessage.toolCalls!!)
+                // Add tool response messages to the conversation
+                currentMessages = (currentMessages + toolResponses).toMutableList()
 
-            // Add tool response messages to the conversation
-            currentMessages = (currentMessages + toolResponses).toMutableList()
+                // Make a follow-up request with the tool results
+                val followUpRequest = Request(
+                    model = model,
+                    messages = currentMessages,
+                    tools = tools.takeIf { it.isNotEmpty() },
+                    temperature = options.temperature,
+                    maxTokens = options.maxTokens
+                )
 
-            // Make a follow-up request with the tool results
-            val followUpRequest = Request(
-                model = model,
-                messages = currentMessages,
-                tools = tools.takeIf { it.isNotEmpty() },
-                temperature = options.temperature,
-                maxTokens = options.maxTokens
-            )
-
-            currentResponse = makeCompletionRequest(followUpRequest)
-            currentMessage = currentResponse.choices.firstOrNull()?.message
+                currentResponse = makeCompletionRequest(followUpRequest)
+                currentMessage = currentResponse.choices.firstOrNull()?.message
+                iteration++
+            } else {
+                // If there are no tool calls, emit the final assistant message and break
+                if (currentMessage.content != null) {
+                    send(
+                        LLMMessage.AssistantMessage(
+                            content = currentMessage.content!!,
+                            rawResponse = Json.encodeToJsonElement(currentResponse)
+                        )
+                    )
+                }
+                break
+            }
         }
-
-        // Return the final assistant message
-        LLMResponse(
-            content = currentMessage?.content ?: "",
-            rawResponse = Json.encodeToJsonElement(currentResponse)
-        )
     }
 }

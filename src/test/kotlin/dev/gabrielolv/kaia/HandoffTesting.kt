@@ -95,13 +95,6 @@ class HandoffTesting : FunSpec({
             id = "tech_support"
             name = "Tech Support"
             description = "Handles technical issues and troubleshooting"
-            processor = { message ->
-                Message(
-                    sender = "tech_support",
-                    recipient = message.sender,
-                    content = "Tech support here. I'll help troubleshoot your issue with: ${message.content}"
-                )
-            }
         }
 
         val salesRep = Agent.llm(
@@ -111,13 +104,6 @@ class HandoffTesting : FunSpec({
             id = "sales_rep"
             name = "Sales Representative"
             description = "Handles product inquiries, upgrades, and new purchases"
-            processor = { message ->
-                Message(
-                    sender = "sales_rep",
-                    recipient = message.sender,
-                    content = "This is sales. I can help you with your interest in our products: ${message.content}"
-                )
-            }
         }
 
         // Register all agents with the orchestrator
@@ -139,10 +125,11 @@ class HandoffTesting : FunSpec({
             content = "Hi there, I'm interested in your services."
         )
 
-        var response = handoffManager.sendMessage(conversationId, initialMessage)
-        println("User: ${initialMessage.content}")
-        println("${handoffManager.getConversation(conversationId)?.currentAgentId}: ${response?.content}")
-        println()
+        handoffManager.sendMessage(conversationId, initialMessage)?.collect { response ->
+            println("User: ${initialMessage.content}")
+            println("${handoffManager.getConversation(conversationId)?.currentAgentId}: ${response}")
+            println()
+        }
 
         // Billing question that should trigger handoff
         val billingMessage = Message(
@@ -150,30 +137,34 @@ class HandoffTesting : FunSpec({
             content = "I have a question about my last invoice. I think I was charged twice. Can you check using your calculator tool what's 0 + 10?"
         )
 
-        response = handoffManager.sendMessage(conversationId, billingMessage)
-        println("User: ${billingMessage.content}")
-        println("${handoffManager.getConversation(conversationId)?.currentAgentId}: ${response?.content}")
-        println()
+        handoffManager.sendMessage(conversationId, billingMessage)?.collect { response ->
+            println("User: ${billingMessage.content}")
+            println("${handoffManager.getConversation(conversationId)?.currentAgentId}: ${response}")
+            println()
+        }
         // Technical question that should trigger another handoff
         val techMessage = Message(
             sender = "user",
             content = "My application keeps crashing when I try to upload large files."
         )
 
-        response = handoffManager.sendMessage(conversationId, techMessage)
-        println("User: ${techMessage.content}")
-        println("${handoffManager.getConversation(conversationId)?.currentAgentId}: ${response?.content}")
-        println()
+         handoffManager.sendMessage(conversationId, techMessage)?.collect { response ->
+             println("User: ${techMessage.content}")
+             println("${handoffManager.getConversation(conversationId)?.currentAgentId}: ${response}")
+             println()
+         }
+
         // Sales inquiry that should trigger yet another handoff
         val salesMessage = Message(
             sender = "user",
             content = "I'd like to upgrade to your premium plan. What features would I get?"
         )
 
-        response = handoffManager.sendMessage(conversationId, salesMessage)
-        println("User: ${salesMessage.content}")
-        println("${handoffManager.getConversation(conversationId)?.currentAgentId}: ${response?.content}")
-        println()
+        handoffManager.sendMessage(conversationId, salesMessage)?.collect { response ->
+            println("User: ${salesMessage.content}")
+            println("${handoffManager.getConversation(conversationId)?.currentAgentId}: ${response}")
+            println()
+        }
 
         // Print handoff history
         println("===== HANDOFF HISTORY =====")
