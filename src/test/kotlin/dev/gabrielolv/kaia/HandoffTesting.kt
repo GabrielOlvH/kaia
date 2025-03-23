@@ -106,11 +106,31 @@ class HandoffTesting : FunSpec({
             description = "Handles product inquiries, upgrades, and new purchases"
         }
 
+        toolManager.errorHandler = { tool, result ->
+            orchestrator.processWithAgent("explainer", Message(content = """
+                Tool Definition:
+                Tool Name: ${tool.name}
+                Tool Desc: ${tool.description}
+                Parameters: 
+                ${tool.parameterSchema}
+                
+                Result:
+                ${result}
+            """.trimIndent())).collect {
+                println(it)
+            }
+        }
+
         // Register all agents with the orchestrator
         orchestrator.addAgent(customerServiceAgent)
         orchestrator.addAgent(billingSpecialist)
         orchestrator.addAgent(techSupport)
         orchestrator.addAgent(salesRep)
+
+        orchestrator.addAgent(Agent.llm(openAI, systemPrompt = "There was an error while executing the following tool. Your job is to explain in a simple manner to the user what happened.") {
+            name = "Explainer"
+            id = "explainer"
+        })
 
         handoffManager.startConversation(
             conversationId = conversationId,
