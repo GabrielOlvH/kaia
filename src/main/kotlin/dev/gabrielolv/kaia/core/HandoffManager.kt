@@ -1,6 +1,9 @@
 package dev.gabrielolv.kaia.core
 
+import dev.gabrielolv.kaia.llm.LLMMessage
 import dev.gabrielolv.kaia.utils.nextThreadId
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.onEach
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -72,23 +75,22 @@ class HandoffManager(val orchestrator: Orchestrator, private val handoffAgentId:
     suspend fun sendMessage(
         conversationId: String,
         message: Message
-    ): Message? {
+    ): Flow<LLMMessage>? {
         assert(message.content.isNotBlank()) { "Message cannot be blank" }
         assert(message.sender.isNotBlank()) { "Message sender cannot be empty" }
 
         val conversation = conversations[conversationId]
             ?: return null
 
-        val response = orchestrator.processWithAgent(handoffAgentId, message)
-        conversation.messages.add(response)
-
-        return response
+        return orchestrator.processWithAgent(handoffAgentId, message).onEach { response ->
+            conversation.messages.add(response)
+        }
     }
 
     /**
      * Get the conversation history
      */
-    fun getHistory(conversationId: String): List<Message>? {
+    fun getHistory(conversationId: String): List<LLMMessage>? {
         return conversations[conversationId]?.messages?.toList()
     }
 
@@ -106,7 +108,7 @@ class HandoffManager(val orchestrator: Orchestrator, private val handoffAgentId:
 data class Conversation(
     val id: String,
     var currentAgentId: String,
-    val messages: MutableList<Message>,
+    val messages: MutableList<LLMMessage>,
     val handoffs: MutableList<Handoff> = mutableListOf()
 )
 

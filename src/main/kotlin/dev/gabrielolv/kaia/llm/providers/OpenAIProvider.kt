@@ -1,8 +1,8 @@
 package dev.gabrielolv.kaia.llm.providers
 
+import dev.gabrielolv.kaia.llm.LLMMessage
 import dev.gabrielolv.kaia.llm.LLMOptions
 import dev.gabrielolv.kaia.llm.LLMProvider
-import dev.gabrielolv.kaia.llm.LLMResponse
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.engine.cio.*
@@ -10,6 +10,8 @@ import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -57,13 +59,17 @@ internal class OpenAIProvider(
         val choices: List<OpenAIChoice>
     )
 
-    override suspend fun generate(prompt: String, options: LLMOptions): LLMResponse {
+    override fun generate(prompt: String, options: LLMOptions): Flow<LLMMessage> = flow {
         val messages = mutableListOf<OpenAIMessage>()
 
+        // Emit and add system message if provided
         options.systemPrompt?.let {
+            emit(LLMMessage.SystemMessage(it))
             messages.add(OpenAIMessage("system", it))
         }
 
+        // Emit and add user message
+        emit(LLMMessage.UserMessage(prompt))
         messages.add(OpenAIMessage("user", prompt))
 
         val request = OpenAIRequest(
@@ -81,6 +87,10 @@ internal class OpenAIProvider(
         }.body()
 
         val content = response.choices.firstOrNull()?.message?.content ?: ""
-        return LLMResponse(content, Json.encodeToJsonElement(response))
+        val rawResponse = Json.encodeToJsonElement(response)
+
+        // Emit assistant message
+        emit(LLMMessage.AssistantMessage(content, rawResponse))
     }
+
 }
