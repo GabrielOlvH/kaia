@@ -1,9 +1,9 @@
 package dev.gabrielolv.kaia.llm.providers
 
 import dev.gabrielolv.kaia.core.tools.ToolManager
+import dev.gabrielolv.kaia.llm.LLMMessage
 import dev.gabrielolv.kaia.llm.LLMOptions
 import dev.gabrielolv.kaia.llm.LLMProvider
-import dev.gabrielolv.kaia.llm.LLMResponse
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.engine.cio.*
@@ -13,12 +13,15 @@ import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 
 /**
- * LLM provider with tool calling capabilities
+ * LLM provider with tool calling capabilities that supports chained tool calls
+ * using Flow to emit all messages in the conversation
  */
 class OpenAIToolsProvider(
     private val apiKey: String,
@@ -93,13 +96,74 @@ class OpenAIToolsProvider(
         val choices: List<Choice>
     )
 
-    override suspend fun generate(prompt: String, options: LLMOptions): LLMResponse = coroutineScope {
+    /**
+     * Helper function to make API requests to avoid code duplication
+     */
+    private suspend fun makeCompletionRequest(request: Request): Response {
+        return client.post("$baseUrl/chat/completions") {
+            contentType(ContentType.Application.Json)
+            header("Authorization", "Bearer $apiKey")
+            setBody(request)
+        }.body()
+    }
+
+    /**
+     * Process tool calls in parallel and return the response messages
+     */
+    private suspend fun processToolCalls(
+        toolCalls: List<ToolCall>,
+        emitMessage: suspend (LLMMessage) -> Unit
+    ) = coroutineScope {
+        toolCalls.map { toolCall ->
+            async {
+                val functionCall = toolCall.function
+                val toolName = functionCall.name
+                val arguments = Json.parseToJsonElement(functionCall.arguments).jsonObject
+
+                // Emit tool call message
+                emitMessage(
+                    LLMMessage.ToolCallMessage(
+                        id = toolCall.id,
+                        name = toolName,
+                        arguments = arguments
+                    )
+                )
+
+                val result = toolManager.executeTool(toolName, arguments)
+
+                // Emit tool response message
+                val toolResponseMessage = LLMMessage.ToolResponseMessage(
+                    toolCallId = toolCall.id,
+                    content = result.result
+                )
+                emitMessage(toolResponseMessage)
+
+                // Return the message for the API
+                Message(
+                    role = "tool",
+                    content = result.result,
+                    toolCallId = toolCall.id
+                )
+            }
+        }.map { it.await() }
+    }
+
+    /**
+     * Generate a flow of messages from the LLM
+     */
+    override fun generate(prompt: String, options: LLMOptions): Flow<LLMMessage> = channelFlow {
         val messages = mutableListOf<Message>()
 
+        // Add system message if provided
         options.systemPrompt?.let {
+            val systemMessage = LLMMessage.SystemMessage(it)
+            send(systemMessage)
             messages.add(Message("system", it))
         }
 
+        // Add user message
+        val userMessage = LLMMessage.UserMessage(prompt)
+        send(userMessage)
         messages.add(Message("user", prompt))
 
         // Convert registered tools to OpenAI format
@@ -113,7 +177,8 @@ class OpenAIToolsProvider(
             )
         }
 
-        val request = Request(
+        // Build and make the initial request
+        val initialRequest = Request(
             model = model,
             messages = messages,
             tools = tools.takeIf { it.isNotEmpty() },
@@ -121,68 +186,52 @@ class OpenAIToolsProvider(
             maxTokens = options.maxTokens
         )
 
-        // Make the initial request
-        val response: Response = client.post("$baseUrl/chat/completions") {
-            contentType(ContentType.Application.Json)
-            header("Authorization", "Bearer $apiKey")
-            setBody(request)
-        }.body()
+        var currentMessages = messages
+        var currentResponse = makeCompletionRequest(initialRequest)
+        var currentMessage = currentResponse.choices.firstOrNull()?.message
 
-        val message = response.choices.firstOrNull()?.message
+        // Handle chained tool calls until there are no more tool calls
+        val maxIterations = 10 // Safety limit to prevent infinite loops
+        var iteration = 0
 
-        // If the model wants to call tools, handle those calls
-        val toolCalls = message?.toolCalls
-        if (!toolCalls.isNullOrEmpty()) {
-            // Execute tool calls in parallel
-            val toolResults = toolCalls.map { toolCall ->
-                async {
-                    val functionCall = toolCall.function
-                    val toolName = functionCall.name
-                    val arguments = Json.parseToJsonElement(functionCall.arguments).jsonObject
+        while (currentMessage != null && iteration < maxIterations) {
+            // Check if the message has tool calls
+            if (currentMessage.toolCalls != null && currentMessage.toolCalls!!.isNotEmpty()) {
+                // Add the assistant's message with tool calls to the conversation
+                currentMessages = (currentMessages + currentMessage).toMutableList()
 
-                    val result = toolManager.executeTool(toolName, arguments)
+                // Process tool calls and get tool response messages
+                val toolResponses = processToolCalls(currentMessage.toolCalls!!) { message ->
+                    send(message)
+                }
 
-                    // Create tool response message
-                    Message(
-                        role = "tool",
-                        content = result.result,
-                        toolCallId = toolCall.id
+                // Add tool response messages to the conversation
+                currentMessages = (currentMessages + toolResponses).toMutableList()
+
+                // Make a follow-up request with the tool results
+                val followUpRequest = Request(
+                    model = model,
+                    messages = currentMessages,
+                    tools = tools.takeIf { it.isNotEmpty() },
+                    temperature = options.temperature,
+                    maxTokens = options.maxTokens
+                )
+
+                currentResponse = makeCompletionRequest(followUpRequest)
+                currentMessage = currentResponse.choices.firstOrNull()?.message
+                iteration++
+            } else {
+                // If there are no tool calls, emit the final assistant message and break
+                if (currentMessage.content != null) {
+                    send(
+                        LLMMessage.AssistantMessage(
+                            content = currentMessage.content!!,
+                            rawResponse = Json.encodeToJsonElement(currentResponse)
+                        )
                     )
                 }
-            }.map { it.await() }
-
-            // Add the assistant's message with tool calls
-            val updatedMessages = messages + message
-
-            // Add tool response messages
-            val finalMessages = updatedMessages + toolResults
-
-            // Make a follow-up request with the tool results
-            val followUpRequest = Request(
-                model = model,
-                messages = finalMessages,
-                tools = tools.takeIf { it.isNotEmpty() },
-                temperature = options.temperature,
-                maxTokens = options.maxTokens
-            )
-
-            val followUpResponse: Response = client.post("$baseUrl/chat/completions") {
-                contentType(ContentType.Application.Json)
-                header("Authorization", "Bearer $apiKey")
-                setBody(followUpRequest)
-            }.body()
-
-            val finalMessage = followUpResponse.choices.firstOrNull()?.message
-            return@coroutineScope LLMResponse(
-                content = finalMessage?.content ?: "",
-                rawResponse = Json.encodeToJsonElement(followUpResponse)
-            )
+                break
+            }
         }
-
-        // If no tool calls, just return the content
-        return@coroutineScope LLMResponse(
-            content = message?.content ?: "",
-            rawResponse = Json.encodeToJsonElement(response)
-        )
     }
 }

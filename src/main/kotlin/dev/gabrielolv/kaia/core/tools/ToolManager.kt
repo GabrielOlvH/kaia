@@ -10,6 +10,8 @@ import kotlinx.serialization.json.jsonObject
 class ToolManager(private val json: Json = Json) {
     private val tools = mutableMapOf<String, Tool>()
 
+    var errorHandler: suspend (Tool, ToolResult) -> Unit = { tool, result -> }
+
     /**
      * Register a tool
      */
@@ -37,7 +39,11 @@ class ToolManager(private val json: Json = Json) {
         )
 
         return try {
-            tool.execute(parameters)
+            val result = tool.execute(parameters)
+            if (!result.success) {
+                errorHandler(tool, result)
+            }
+            result
         } catch (e: Exception) {
             ToolResult(
                 success = false,
