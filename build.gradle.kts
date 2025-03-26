@@ -24,10 +24,10 @@ dependencies {
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.ktor.client.cio.jvm)
-    implementation(libs.kgraphql)
     implementation(libs.exposed.core)
     implementation(libs.exposed.dao)
     implementation(libs.exposed.jdbc)
+    implementation(libs.exposed.datetime)
 
     // Test dependencies
     testImplementation(libs.kotest.runner.junit5)
