@@ -28,12 +28,15 @@ dependencies {
     implementation(libs.exposed.dao)
     implementation(libs.exposed.jdbc)
     implementation(libs.exposed.datetime)
+    implementation("com.github.jsqlparser:jsqlparser:4.9")
 
     // Test dependencies
     testImplementation(libs.kotest.runner.junit5)
     testImplementation(libs.kotest.assertions.core)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
+    // https://mvnrepository.com/artifact/com.h2database/h2
+    implementation("com.h2database:h2:2.3.232")
 }
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
