@@ -1,6 +1,5 @@
 package dev.gabrielolv.kaia.core.tools
 
-import dev.gabrielolv.kaia.core.ToolExecutionFailedException
 import kotlinx.serialization.json.JsonObject
 
 
