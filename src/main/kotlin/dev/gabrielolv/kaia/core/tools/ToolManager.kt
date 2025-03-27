@@ -1,5 +1,6 @@
 package dev.gabrielolv.kaia.core.tools
 
+import dev.gabrielolv.kaia.core.ToolExecutionFailedException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
@@ -9,8 +10,6 @@ import kotlinx.serialization.json.jsonObject
  */
 class ToolManager(private val json: Json = Json) {
     private val tools = mutableMapOf<String, Tool>()
-
-    var errorHandler: suspend (Tool, ToolResult) -> Unit = { tool, result -> }
 
     /**
      * Register a tool
@@ -38,18 +37,16 @@ class ToolManager(private val json: Json = Json) {
             result = "Tool '$name' not found"
         )
 
-        return try {
-            val result = tool.execute(parameters)
-            if (!result.success) {
-                errorHandler(tool, result)
-            }
-            result
+        val result = try {
+            tool.execute(parameters)
         } catch (e: Exception) {
-            ToolResult(
-                success = false,
-                result = "Error executing tool: ${e.message}"
-            )
+            throw ToolExecutionFailedException(tool, parameters, null, e)
         }
+
+        if (!result.success) {
+            throw ToolExecutionFailedException(tool, parameters, result, null)
+        }
+        return result
     }
 
     /**

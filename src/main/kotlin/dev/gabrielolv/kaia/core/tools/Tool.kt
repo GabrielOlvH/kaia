@@ -1,5 +1,6 @@
 package dev.gabrielolv.kaia.core.tools
 
+import dev.gabrielolv.kaia.core.ToolExecutionFailedException
 import kotlinx.serialization.json.JsonObject
 
 
@@ -14,6 +15,7 @@ interface Tool {
     /**
      * Execute the tool with the given parameters
      */
+    @Throws(ToolExecutionFailedException::class)
     suspend fun execute(parameters: JsonObject): ToolResult
 }
 

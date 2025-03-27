@@ -18,6 +18,7 @@ import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.string.shouldContain
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 
@@ -188,7 +189,7 @@ class WorkflowExecutionTests : FunSpec({
 
             println("\n===== TEST: Complex Request (Billing -> Tech) =====")
             val responses = mutableListOf<LLMMessage>()
-            handoffManager.sendMessage(conversationId, complexMessage, plannerAgent.id)?.collect {
+            handoffManager.sendMessage(conversationId, complexMessage, plannerAgent.id)?.catch { err -> err.printStackTrace() }?.collect {
                 println("Received: $it")
                 responses.add(it)
             }
@@ -329,7 +330,7 @@ class WorkflowExecutionTests : FunSpec({
             println("\n===== TEST: Workflow Failure =====")
             val responses = mutableListOf<LLMMessage>()
             // Use the dedicated manager instance for this test
-            managerForFailureTest.sendMessage(conversationId, failingWorkflowMessage, plannerAgentForFailureTest.id)?.collect {
+            managerForFailureTest.sendMessage(conversationId, failingWorkflowMessage, plannerAgentForFailureTest.id)?.catch { err -> err.printStackTrace() }?.collect {
                 println("Received: $it")
                 responses.add(it)
             }
