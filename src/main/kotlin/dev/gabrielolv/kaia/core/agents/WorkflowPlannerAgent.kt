@@ -90,6 +90,7 @@ fun Agent.Companion.withWorkflowPlanner(
             flow {
                 val planningOptions = LLMOptions(
                     systemPrompt = workflowPlanPrompt,
+                    responseFormat = "json_object",
                     temperature = 0.1 // Low temp for deterministic planning
                 )
 
