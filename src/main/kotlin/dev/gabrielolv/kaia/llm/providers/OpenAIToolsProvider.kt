@@ -40,6 +40,7 @@ class OpenAIToolsProvider(
                 namingStrategy = JsonNamingStrategy.SnakeCase
             })
         }
+        expectSuccess = true
     }
 
     @Serializable
