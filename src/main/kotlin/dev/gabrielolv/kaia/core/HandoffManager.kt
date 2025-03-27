@@ -11,7 +11,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.onCompletion
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
@@ -70,9 +69,9 @@ class HandoffManager(
                         }
                         .onCompletion { cause ->
                             if (cause == null && conversation.currentWorkflow?.steps?.lastOrNull()?.status == StepStatus.COMPLETED) {
-                                managerScope.launch {
+                               // managerScope.launch {
                                     performFinalVerification(conversationId, this@channelFlow)
-                                }
+                              //  }
                             } else if (cause != null) {
                                 val errorMsg =
                                     LLMMessage.SystemMessage(content = "Workflow interrupted: ${cause.message}")

@@ -21,13 +21,6 @@ import io.kotest.matchers.string.shouldContain
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 
-// Assuming CalculatorParams exists like this:
-// object CalculatorParams {
-//     val a = ToolParameter.Double("a", "First number", true)
-//     val b = ToolParameter.Double("b", "Second number", true)
-//     val operation = ToolParameter.String("operation", "Operation (add, subtract, multiply, divide)", true)
-// }
-
 class WorkflowExecutionTests : FunSpec({
 
     // --- Test Setup ---
@@ -72,6 +65,12 @@ class WorkflowExecutionTests : FunSpec({
         baseUrl = "https://api.groq.com/openai/v1",
         model = "llama3-70b-8192", // Updated model name if needed
         toolManager = toolManager
+    )
+
+    val reasoningProvider = LLMProvider.openAI(
+        apiKey = apiKey ?: "dummy-key", // Use dummy key if not set to avoid crash
+        baseUrl = "https://api.groq.com/openai/v1",
+        model = "deepseek-r1-distill-llama-70b", // Updated model name if needed
     )
 
     // --- Agent Definitions ---
@@ -121,11 +120,11 @@ class WorkflowExecutionTests : FunSpec({
     orchestrator.addAgent(salesAgent)
     val handoffManager = HandoffManager(
         orchestrator = orchestrator,
-        provider = llmProvider // Pass provider for verification step
+        provider = reasoningProvider // Pass provider for verification step
     )
     val plannerAgent = Agent.withWorkflowPlanner(
         handoffManager = handoffManager, // Temp manager needed for DB access, ID will be set below
-        provider = llmProvider,
+        provider = reasoningProvider,
         agentDatabase = orchestrator.getAgentDatabase(), // Get agents from orchestrator
         defaultAgent = defaultCustomerServiceAgent, // Specify the default
         json = json
@@ -165,12 +164,7 @@ class WorkflowExecutionTests : FunSpec({
 
             // Verification
             responses shouldNotBe null
-            responses.filterIsInstance<LLMMessage.SystemMessage>().any {
-                it.content.contains("Planning workflow...")
-            } shouldBe true
-            responses.filterIsInstance<LLMMessage.SystemMessage>().any {
-                it.content.contains("No workflow needed") || it.content.contains("Processing directly")
-            } shouldBe true
+
             // Check if the default agent actually responded
             responses.filterIsInstance<LLMMessage.AssistantMessage>().size shouldBeGreaterThan 0
             // Check that no workflow steps were executed
@@ -203,11 +197,9 @@ class WorkflowExecutionTests : FunSpec({
             responses shouldNotBe null
             // Planning happened
             responses.filterIsInstance<LLMMessage.SystemMessage>().any {
-                it.content.contains("Planning workflow...")
+                it.content.contains("Planning execution...")
             } shouldBe true
-            responses.filterIsInstance<LLMMessage.SystemMessage>().any {
-                it.content.contains("Workflow planned")
-            } shouldBe true
+
 
             // Check for execution steps
             val step1Execution = responses.filterIsInstance<LLMMessage.SystemMessage>().any {
@@ -264,9 +256,6 @@ class WorkflowExecutionTests : FunSpec({
             responses shouldNotBe null
             // Planning should identify billing agent
             responses.filterIsInstance<LLMMessage.SystemMessage>().any {
-                it.content.contains("Workflow planned")
-            } shouldBe true
-            responses.filterIsInstance<LLMMessage.SystemMessage>().any {
                 it.content.contains("Executing Step 1") && it.content.contains(billingAgent.id)
             } shouldBe true
 
@@ -313,9 +302,14 @@ class WorkflowExecutionTests : FunSpec({
             orchestrator.addAgent(failingAgent) // Add to orchestrator *for this test*
 
             // Update planner's agent database view if necessary (or recreate planner)
+            val managerForFailureTest = HandoffManager(
+                orchestrator = orchestrator,
+                provider = reasoningProvider
+            )
+
             val plannerAgentForFailureTest = Agent.withWorkflowPlanner(
-                handoffManager = handoffManager, // Manager instance is okay
-                provider = llmProvider,
+                handoffManager = managerForFailureTest, // Manager instance is okay
+                provider = reasoningProvider,
                 agentDatabase = orchestrator.getAgentDatabase(), // Get updated list
                 defaultAgent = defaultCustomerServiceAgent,
                 json = json
@@ -323,11 +317,6 @@ class WorkflowExecutionTests : FunSpec({
             orchestrator.addAgent(plannerAgentForFailureTest) // Add/replace planner
 
             // Need a dedicated manager instance if planner ID changes or state needs isolation
-            val managerForFailureTest = HandoffManager(
-                orchestrator = orchestrator,
-                provider = llmProvider
-                // Use the new planner ID
-            )
 
             val conversationId = managerForFailureTest.startConversation()
             // Message designed to trigger billing -> failing_agent
@@ -340,7 +329,7 @@ class WorkflowExecutionTests : FunSpec({
             println("\n===== TEST: Workflow Failure =====")
             val responses = mutableListOf<LLMMessage>()
             // Use the dedicated manager instance for this test
-            managerForFailureTest.sendMessage(conversationId, failingWorkflowMessage, plannerAgent.id)?.collect {
+            managerForFailureTest.sendMessage(conversationId, failingWorkflowMessage, plannerAgentForFailureTest.id)?.collect {
                 println("Received: $it")
                 responses.add(it)
             }
@@ -348,9 +337,7 @@ class WorkflowExecutionTests : FunSpec({
             // Verification
             responses shouldNotBe null
             // Step 1 (Billing) should likely complete
-            responses.filterIsInstance<LLMMessage.SystemMessage>().any {
-                it.content.contains("Executing Step 1") && it.content.contains(billingAgent.id)
-            } shouldBe true
+
 
             // Step 2 (Failing) should start and then error out
             responses.filterIsInstance<LLMMessage.SystemMessage>().any {

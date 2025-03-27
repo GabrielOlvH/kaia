@@ -28,8 +28,7 @@ enum class StepStatus {
 // Helper structure for the planning LLM call
 @Serializable
 data class WorkflowPlanResponse(
-    val requiresWorkflow: Boolean,
-    val workflow: List<WorkflowStepDescription>? = null, // Use a simpler structure for generation
+    val workflow: List<WorkflowStepDescription>, // Use a simpler structure for generation
     val reason: String? = null // Reason why a workflow is/isn't needed
 )
 
