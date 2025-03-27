@@ -94,14 +94,13 @@ fun Agent.Companion.withHandoff(
 
                         if (targetAgent != null) {
                             // Forward the message flow from the target agent
-                            targetAgent.process(message).collect { emit(it) }
+                            targetAgent.process(message).collect(::emit)
                         } else {
                             emit(LLMMessage.SystemMessage(content = "Handoff to agent $targetAgentId successful, but could not process message."))
                         }
                     } else {
                         // Handoff failed, process normally
                         val options = LLMOptions(systemPrompt = systemPrompt)
-                        val handoffFailedPrefix = "I tried to hand off your request to a more specialized agent, but couldn't. I'll do my best to help.\n\n"
 
                         // Collect messages from the provider
                         provider.generate(message.content, options).collect(::emit)

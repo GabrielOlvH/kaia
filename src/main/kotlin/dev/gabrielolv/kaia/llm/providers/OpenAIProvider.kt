@@ -28,6 +28,8 @@ internal class OpenAIProvider(
         install(ContentNegotiation) {
             json(Json {
                 ignoreUnknownKeys = true
+                explicitNulls = false
+                encodeDefaults = true
                 isLenient = true
                 namingStrategy = JsonNamingStrategy.SnakeCase
             })
@@ -46,8 +48,12 @@ internal class OpenAIProvider(
         val messages: List<OpenAIMessage>,
         val temperature: Double = 0.7,
         val maxTokens: Int? = null,
-        val stop: List<String>? = null
+        val stop: List<String>? = null,
+        val responseFormat: ResponseFormat = ResponseFormat()
     )
+
+    @Serializable
+    private data class ResponseFormat(val type: String = "text")
 
     @Serializable
     private data class OpenAIChoice(
@@ -77,7 +83,8 @@ internal class OpenAIProvider(
             messages = messages,
             temperature = options.temperature,
             maxTokens = options.maxTokens,
-            stop = options.stopSequences.takeIf { it.isNotEmpty() }
+            stop = options.stopSequences.takeIf { it.isNotEmpty() },
+            responseFormat = ResponseFormat(options.responseFormat)
         )
 
         val response: OpenAIResponse = client.post("$baseUrl/chat/completions") {

@@ -82,8 +82,12 @@ class OpenAIToolsProvider(
         val messages: List<Message>,
         val tools: List<ToolDefinition>? = null,
         val temperature: Double = 0.7,
-        val maxTokens: Int? = null
+        val maxTokens: Int? = null,
+        val responseFormat: ResponseFormat = ResponseFormat()
     )
+
+    @Serializable
+    private data class ResponseFormat(val type: String = "text")
 
     @Serializable
     private data class Choice(
@@ -183,7 +187,8 @@ class OpenAIToolsProvider(
             messages = messages,
             tools = tools.takeIf { it.isNotEmpty() },
             temperature = options.temperature,
-            maxTokens = options.maxTokens
+            maxTokens = options.maxTokens,
+            responseFormat = ResponseFormat(options.responseFormat)
         )
 
         var currentMessages = messages
