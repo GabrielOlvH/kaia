@@ -1,10 +1,10 @@
 package dev.gabrielolv.kaia.core
 
 import dev.gabrielolv.kaia.core.agents.Agent
+import dev.gabrielolv.kaia.llm.LLMMessage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
@@ -41,7 +41,7 @@ class Orchestrator(
     /**
      * Process a message through a specific agent
      */
-    suspend fun processWithAgent(agentId: String, message: Message): Message {
+    suspend fun processWithAgent(agentId: String, message: Message): Flow<LLMMessage> {
         val agent = agents[agentId] ?: throw IllegalArgumentException("Agent $agentId not found")
         return agent.process(message)
     }
@@ -49,22 +49,20 @@ class Orchestrator(
     /**
      * Send a message to multiple agents and collect their responses
      */
-    fun broadcast(message: Message, agentIds: List<String>): Flow<Message> = flow {
-        val responses = agentIds.map { agentId ->
+    fun broadcast(message: Message, agentIds: List<String>): Flow<LLMMessage> = flow {
+        agentIds.map { agentId ->
             scope.async {
                 try {
                     val agent = agents[agentId] ?: throw IllegalArgumentException("Agent $agentId not found")
-                    agent.process(message.copy(recipient = agentId))
+                    agent.process(message.copy(recipient = agentId)).collect { emit(it) }
                 } catch (e: Exception) {
-                    Message(
-                        sender = "system",
-                        recipient = "orchestrator",
-                        content = "Error processing message by agent $agentId: ${e.message}"
+                    emit(
+                        LLMMessage.SystemMessage(
+                            content = "Error processing message by agent $agentId: ${e.message}"
+                        )
                     )
                 }
             }
         }
-
-        responses.awaitAll().forEach { emit(it) }
     }
 }

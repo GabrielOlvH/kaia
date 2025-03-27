@@ -36,14 +36,16 @@ class ToolManager(private val json: Json = Json) {
             result = "Tool '$name' not found"
         )
 
-        return try {
+        val result = try {
             tool.execute(parameters)
         } catch (e: Exception) {
-            ToolResult(
-                success = false,
-                result = "Error executing tool: ${e.message}"
-            )
+            throw ToolExecutionFailedException(tool, parameters, null, e)
         }
+
+        if (!result.success) {
+            throw ToolExecutionFailedException(tool, parameters, result, null)
+        }
+        return result
     }
 
     /**

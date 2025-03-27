@@ -4,12 +4,12 @@ import dev.gabrielolv.kaia.core.tools.ToolManager
 import dev.gabrielolv.kaia.llm.providers.CustomProvider
 import dev.gabrielolv.kaia.llm.providers.OpenAIProvider
 import dev.gabrielolv.kaia.llm.providers.OpenAIToolsProvider
+import kotlinx.coroutines.flow.Flow
 
 interface LLMProvider {
-    /**
-     * Generate a response from the LLM
-     */
-    suspend fun generate(prompt: String, options: LLMOptions = LLMOptions()): LLMResponse
+
+
+    fun generate(prompt: String, options: LLMOptions = LLMOptions()): Flow<LLMMessage>
 
     companion object {
         /**
