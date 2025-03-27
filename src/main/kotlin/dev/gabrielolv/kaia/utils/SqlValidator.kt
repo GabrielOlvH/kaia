@@ -71,7 +71,7 @@ fun validateSelectStructure(sql: String, allowedTables: Set<String>): Boolean {
     }
 }
 
-const val MAX_ESTIMATED_COST_THRESHOLD = 10000.0
+const val MAX_ESTIMATED_COST_THRESHOLD = 100.0
 /**
  * Executes EXPLAIN on the given SQL query and performs basic analysis
  * on the query plan (e.g., checks for Seq Scans on large tables, high cost).
@@ -100,7 +100,6 @@ fun explainAndAnalyzePlan(
 
                 while (resultSet.next()) {
                     val planLine = resultSet.getString(1)
-
                     val costMatch = """cost=\d+\.\d+\.\.(\d+\.\d+)""".toRegex().find(planLine)
                     if (costMatch != null) {
                         val cost = costMatch.groupValues[1].toDoubleOrNull()
