@@ -1,7 +1,6 @@
 package dev.gabrielolv.kaia.core
 
 import dev.gabrielolv.kaia.llm.LLMMessage
-import dev.gabrielolv.kaia.llm.LLMOptions
 import dev.gabrielolv.kaia.llm.LLMProvider
 import dev.gabrielolv.kaia.utils.nextThreadId
 import kotlinx.coroutines.CoroutineScope
@@ -69,9 +68,7 @@ class HandoffManager(
                         }
                         .onCompletion { cause ->
                             if (cause == null && conversation.currentWorkflow?.steps?.lastOrNull()?.status == StepStatus.COMPLETED) {
-                               // managerScope.launch {
-                                    performFinalVerification(conversationId, this@channelFlow)
-                              //  }
+                               send(LLMMessage.SystemMessage("Workflow completed successfully!"))
                             } else if (cause != null) {
                                 val errorMsg =
                                     LLMMessage.SystemMessage(content = "Workflow interrupted: ${cause.message}")
@@ -165,39 +162,6 @@ class HandoffManager(
             send(LLMMessage.SystemMessage(content = "Workflow completed successfully."))
         } else {
             send(LLMMessage.SystemMessage(content = "Workflow finished with errors or was interrupted."))
-        }
-    }
-
-    /**
-     * Performs the final verification step after successful workflow completion.
-     */
-    private suspend fun performFinalVerification(
-        conversationId: String,
-        flowCollector: kotlinx.coroutines.channels.SendChannel<LLMMessage>
-    ) {
-        val conversation = conversations[conversationId] ?: return
-        val lastWorkflow = conversation.currentWorkflow
-
-        val verificationPrompt = """
-        The user's request has been processed through the following steps:
-        ${lastWorkflow?.steps?.joinToString("\n") { "- Agent ${it.agentId}: ${it.action} (${it.status})" }}
-
-        Based on the original request and the steps taken, please confirm with the user if their request has been fully addressed or if anything else is needed. Be concise and helpful.
-        """
-
-        val verificationOptions = LLMOptions(systemPrompt = verificationPrompt, temperature = 0.5)
-
-        try {
-            flowCollector.send(LLMMessage.SystemMessage(content = "Performing final verification..."))
-            provider.generate("Please verify the outcome.", verificationOptions)
-                .collect { verificationMessage ->
-                    flowCollector.send(verificationMessage)
-                    conversation.messages.add(verificationMessage)
-                }
-        } catch (e: Exception) {
-            val errorMsg = LLMMessage.SystemMessage(content = "Error during final verification: ${e.message}")
-            flowCollector.send(errorMsg)
-            conversation.messages.add(errorMsg)
         }
     }
 
