@@ -9,20 +9,22 @@ import dev.gabrielolv.kaia.llm.LLMProvider
 fun Agent.Companion.llm(
     provider: LLMProvider,
     systemPrompt: String? = null,
+    historySize: Int? = 10, // Allow configuring history size per agent
     block: AgentBuilder.() -> Unit
 ): Agent {
     val builder = AgentBuilder().apply(block)
 
-    // Set up the flow-based processor
-    builder.processor = processor@{ message ->
+    builder.processor = processor@{ message, conversation -> // Updated signature
 
         val options = LLMOptions(
             systemPrompt = systemPrompt,
-            temperature = 0.7
+            temperature = 0.7,
+            historySize = historySize
         )
 
-        return@processor provider.generate(message.content, options)
+        val history = conversation.messages.toList()
 
+        return@processor provider.generate(history, options)
     }
 
     return builder.build()
