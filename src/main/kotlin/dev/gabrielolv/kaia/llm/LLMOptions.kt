@@ -10,5 +10,7 @@ data class LLMOptions(
     val maxTokens: Int? = null,
     val stopSequences: List<String> = emptyList(),
     val systemPrompt: String? = null,
-    val additionalParameters: Map<String, JsonElement> = emptyMap()
+    val additionalParameters: Map<String, JsonElement> = emptyMap(),
+    val responseFormat: String = "text",
+    val historySize: Int? = 10
 )

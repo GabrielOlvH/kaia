@@ -1,28 +1,30 @@
 package dev.gabrielolv.kaia.core.agents
 
-import dev.gabrielolv.kaia.core.Message
 import dev.gabrielolv.kaia.llm.LLMOptions
 import dev.gabrielolv.kaia.llm.LLMProvider
 
+/**
+ * Creates an agent that uses an LLM provider to generate responses
+ */
 fun Agent.Companion.llm(
     provider: LLMProvider,
     systemPrompt: String? = null,
+    historySize: Int? = 10, // Allow configuring history size per agent
     block: AgentBuilder.() -> Unit
 ): Agent {
     val builder = AgentBuilder().apply(block)
-    builder.processor = processor@{ message ->
+
+    builder.processor = processor@{ message, conversation -> // Updated signature
+
         val options = LLMOptions(
             systemPrompt = systemPrompt,
-            temperature = 0.7
+            temperature = 0.7,
+            historySize = historySize
         )
 
-        val llmResponse = provider.generate(message.content, options)
+        val history = conversation.messages.toList()
 
-        Message(
-            sender = builder.id.takeIf { it.isNotEmpty() } ?: "llm-agent",
-            recipient = message.sender,
-            content = llmResponse.content
-        )
+        return@processor provider.generate(history, options)
     }
 
     return builder.build()

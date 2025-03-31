@@ -14,6 +14,7 @@ interface Tool {
     /**
      * Execute the tool with the given parameters
      */
+    @Throws(ToolExecutionFailedException::class)
     suspend fun execute(parameters: JsonObject): ToolResult
 }
 
