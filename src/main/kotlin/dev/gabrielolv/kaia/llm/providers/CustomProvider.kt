@@ -19,7 +19,7 @@ import kotlinx.serialization.json.JsonElement
 internal class CustomProvider(
     private val url: String,
     private val headers: Map<String, String>,
-    private val requestTransformer: (String, LLMOptions) -> Any,
+    private val requestTransformer: (List<LLMMessage>, LLMOptions) -> Any,
     private val responseTransformer: (Any) -> LLMResponse
 ) : LLMProvider {
     private val client = HttpClient(CIO) {
@@ -31,28 +31,64 @@ internal class CustomProvider(
         }
     }
 
-    override fun generate(prompt: String, options: LLMOptions): Flow<LLMMessage> = flow {
-        // Emit system message if provided
-        options.systemPrompt?.let {
-            emit(LLMMessage.SystemMessage(it))
+    override fun generate(
+        messages: List<LLMMessage>, // Changed parameter
+        options: LLMOptions
+    ): Flow<LLMMessage> = flow {
+
+        // --- History Trimming (Example - Adapt as needed for your custom API) ---
+        val messagesToSend = mutableListOf<LLMMessage>()
+        var systemMessage: LLMMessage.SystemMessage? = null
+
+        // Extract system message (options override history)
+        val systemPromptFromOptions = options.systemPrompt?.let { LLMMessage.SystemMessage(it) }
+        val systemPromptFromHistory = messages.filterIsInstance<LLMMessage.SystemMessage>().lastOrNull()
+        systemMessage = systemPromptFromOptions ?: systemPromptFromHistory
+        systemMessage?.let { messagesToSend.add(it) }
+
+        // Get conversation history (excluding system messages)
+        val conversationMessages = messages.filter { it !is LLMMessage.SystemMessage }
+
+        // Apply history size limit
+        val trimmedConversation = options.historySize?.let { size ->
+            conversationMessages.takeLast(size)
+        } ?: conversationMessages
+
+        messagesToSend.addAll(trimmedConversation)
+        // --- End History Trimming Example ---
+
+
+        // Use the (potentially trimmed) messages list with the transformer
+        val requestBody = try {
+            requestTransformer(messagesToSend, options)
+        } catch (e: Exception) {
+            emit(LLMMessage.SystemMessage("Error transforming request: ${e.message}"))
+            return@flow
         }
 
-        // Emit user message
-        emit(LLMMessage.UserMessage(prompt))
 
-        val requestBody = requestTransformer(prompt, options)
+        val response: JsonElement = try {
+            client.post(url) {
+                contentType(ContentType.Application.Json)
+                this@CustomProvider.headers.forEach { (key, value) ->
+                    header(key, value)
+                }
+                setBody(requestBody)
+            }.body()
+        } catch (e: Exception) {
+            emit(LLMMessage.SystemMessage("Error calling custom API: ${e.message}"))
+            return@flow
+        }
 
-        val response: JsonElement = client.post(url) {
-            contentType(ContentType.Application.Json)
-            this@CustomProvider.headers.forEach { (key, value) ->
-                header(key, value)
-            }
-            setBody(requestBody)
-        }.body()
+        val result = try {
+            responseTransformer(response)
+        } catch (e: Exception) {
+            emit(LLMMessage.SystemMessage("Error transforming response: ${e.message}"))
+            return@flow
+        }
 
-        val result = responseTransformer(response)
 
-        // Emit assistant message
+        // Emit only the assistant message
         emit(LLMMessage.AssistantMessage(result.content, result.rawResponse))
     }
 }

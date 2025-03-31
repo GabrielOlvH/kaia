@@ -30,15 +30,16 @@ class OpenAIToolsProvider(
     private val toolManager: ToolManager
 ) : LLMProvider {
     @OptIn(ExperimentalSerializationApi::class)
+    private val json = Json {
+        ignoreUnknownKeys = true
+        explicitNulls = false
+        encodeDefaults = true
+        isLenient = true
+        namingStrategy = JsonNamingStrategy.SnakeCase
+    }
     private val client = HttpClient(CIO) {
         install(ContentNegotiation) {
-            json(Json {
-                ignoreUnknownKeys = true
-                explicitNulls = false
-                encodeDefaults = true
-                isLenient = true
-                namingStrategy = JsonNamingStrategy.SnakeCase
-            })
+            json(json)
         }
         expectSuccess = true
     }
@@ -48,7 +49,8 @@ class OpenAIToolsProvider(
         val role: String,
         val content: String? = null,
         val toolCalls: List<ToolCall>? = null,
-        val toolCallId: String? = null
+        val toolCallId: String? = null,
+        val name: String? = null
     )
 
     @Serializable
@@ -100,6 +102,30 @@ class OpenAIToolsProvider(
     private data class Response(
         val choices: List<Choice>
     )
+
+    private fun LLMMessage.toOpenAIToolMessage(): Message = when (this) {
+        is LLMMessage.UserMessage -> Message("user", content = content)
+        is LLMMessage.AssistantMessage -> Message("assistant", content = content)
+        is LLMMessage.SystemMessage -> Message("system", content = content)
+        is LLMMessage.ToolCallMessage -> {
+            Message(
+                role = "assistant",
+                toolCalls = listOf(
+                    ToolCall(
+                        id = id,
+                        type = "function",
+                        function = FunctionCall(name = name, arguments = json.encodeToString(arguments))
+                    )
+                )
+            )
+        }
+
+        is LLMMessage.ToolResponseMessage -> Message(
+            role = "tool",
+            toolCallId = toolCallId,
+            content = content
+        )
+    }
 
     /**
      * Helper function to make API requests to avoid code duplication
@@ -153,23 +179,37 @@ class OpenAIToolsProvider(
         }.map { it.await() }
     }
 
-    /**
-     * Generate a flow of messages from the LLM
-     */
-    override fun generate(prompt: String, options: LLMOptions): Flow<LLMMessage> = channelFlow {
-        val messages = mutableListOf<Message>()
+    override fun generate(
+        messages: List<LLMMessage>, // Changed parameter
+        options: LLMOptions
+    ): Flow<LLMMessage> = channelFlow {
+        // Prepare initial messages for the API call, applying history limits
+        val initialApiMessages = mutableListOf<Message>()
+        var systemMessage: Message? = null
 
-        // Add system message if provided
-        options.systemPrompt?.let {
-            val systemMessage = LLMMessage.SystemMessage(it)
-            send(systemMessage)
-            messages.add(Message("system", it))
+        // Extract system message (options override history)
+        val systemPromptFromOptions = options.systemPrompt?.let { Message("system", it) }
+        val systemPromptFromHistory = messages.filterIsInstance<LLMMessage.SystemMessage>().lastOrNull()?.toOpenAIToolMessage()
+        systemMessage = systemPromptFromOptions ?: systemPromptFromHistory
+        systemMessage?.let { initialApiMessages.add(it) }
+
+        // Get conversation history (excluding system messages)
+        val conversationMessages = messages.filter { it !is LLMMessage.SystemMessage }
+
+        // Apply history size limit
+        val trimmedConversation = options.historySize?.let { size ->
+            conversationMessages.takeLast(size)
+        } ?: conversationMessages
+
+        // Convert and add conversation messages
+        trimmedConversation.map { it.toOpenAIToolMessage() }.forEach { initialApiMessages.add(it) }
+
+        // Ensure there's content if needed
+        if (initialApiMessages.none { it.role != "system" }) {
+            send(LLMMessage.SystemMessage("Error: No valid messages found to send to LLM after filtering."))
+            close() // Close the channelFlow
+            return@channelFlow
         }
-
-        // Add user message
-        val userMessage = LLMMessage.UserMessage(prompt)
-        send(userMessage)
-        messages.add(Message("user", prompt))
 
         // Convert registered tools to OpenAI format
         val tools = toolManager.getAllTools().map { tool ->
@@ -182,62 +222,70 @@ class OpenAIToolsProvider(
             )
         }
 
-        // Build and make the initial request
-        val initialRequest = Request(
-            model = model,
-            messages = messages,
-            tools = tools.takeIf { it.isNotEmpty() },
-            temperature = options.temperature,
-            maxTokens = options.maxTokens,
-            responseFormat = ResponseFormat(options.responseFormat)
-        )
-
-        var currentMessages = messages
-        var currentResponse = makeCompletionRequest(initialRequest)
-        var currentMessage = currentResponse.choices.firstOrNull()?.message
-
-        // Handle chained tool calls until there are no more tool calls
-        val maxIterations = 10 // Safety limit to prevent infinite loops
+        // --- Tool call loop ---
+        var currentApiMessages = initialApiMessages.toList() // Start with the history
+        val maxIterations = 10
         var iteration = 0
 
-        while (currentMessage != null && iteration < maxIterations) {
-            // Check if the message has tool calls
-            if (currentMessage.toolCalls != null && currentMessage.toolCalls!!.isNotEmpty()) {
-                // Add the assistant's message with tool calls to the conversation
-                currentMessages = (currentMessages + currentMessage).toMutableList()
+        while (iteration < maxIterations) {
+            val request = Request(
+                model = model,
+                messages = currentApiMessages, // Use current message list
+                tools = tools.takeIf { it.isNotEmpty() },
+                temperature = options.temperature,
+                maxTokens = options.maxTokens,
+                responseFormat = ResponseFormat(options.responseFormat) // Pass format if needed
+            )
 
-                // Process tool calls and get tool response messages
-                val toolResponses = processToolCalls(currentMessage.toolCalls!!) { message ->
-                    send(message)
-                }
-
-                // Add tool response messages to the conversation
-                currentMessages = (currentMessages + toolResponses).toMutableList()
-
-                // Make a follow-up request with the tool results
-                val followUpRequest = Request(
-                    model = model,
-                    messages = currentMessages,
-                    tools = tools.takeIf { it.isNotEmpty() },
-                    temperature = options.temperature,
-                    maxTokens = options.maxTokens
-                )
-
-                currentResponse = makeCompletionRequest(followUpRequest)
-                currentMessage = currentResponse.choices.firstOrNull()?.message
-                iteration++
-            } else {
-                // If there are no tool calls, emit the final assistant message and break
-                if (currentMessage.content != null) {
-                    send(
-                        LLMMessage.AssistantMessage(
-                            content = currentMessage.content!!,
-                            rawResponse = Json.encodeToJsonElement(currentResponse)
-                        )
-                    )
-                }
-                break
+            val response: Response = try {
+                makeCompletionRequest(request)
+            } catch (e: Exception) {
+                send(LLMMessage.SystemMessage("Error during API call: ${e.message}"))
+                close(e) // Close channel with error
+                return@channelFlow
             }
+
+            val choice = response.choices.firstOrNull()
+            val responseMessage = choice?.message
+
+            if (responseMessage == null) {
+                send(LLMMessage.SystemMessage("Error: No response message from LLM."))
+                break // Exit loop
+            }
+
+            // Check for tool calls in the response
+            if (!responseMessage.toolCalls.isNullOrEmpty()) {
+                // Add the assistant's message *requesting* the tool call to our history
+                // The API response 'responseMessage' already has the 'assistant' role and tool_calls
+                currentApiMessages = currentApiMessages + responseMessage
+
+                // Process tool calls (this emits ToolCallMessage and ToolResponseMessage via 'send')
+                val toolResponseMessages = processToolCalls(responseMessage.toolCalls) { message ->
+                    send(message) // Emit ToolCall and ToolResponse messages downstream
+                }
+
+                // Add the tool *responses* to the history for the next API call
+                currentApiMessages = currentApiMessages + toolResponseMessages
+                iteration++
+
+            } else {
+                // No tool calls, this is the final assistant message
+                if (responseMessage.content != null) {
+                    val finalAssistantMessage = LLMMessage.AssistantMessage(
+                        content = responseMessage.content,
+                        rawResponse = Json.encodeToJsonElement(response)
+                    )
+                    send(finalAssistantMessage) // Emit final response
+                } else {
+                    // Handle cases where there's no content and no tool calls (should be rare)
+                    send(LLMMessage.SystemMessage("Warning: LLM finished without content or tool calls."))
+                }
+                break // Exit loop
+            }
+        }
+
+        if (iteration == maxIterations) {
+            send(LLMMessage.SystemMessage("Error: Reached maximum tool call iterations ($maxIterations)."))
         }
     }
 }

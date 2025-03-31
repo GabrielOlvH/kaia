@@ -105,14 +105,14 @@ fun Agent.Companion.withDatabaseAccess(
         ${getDdlForTables(tables)}
     ```
     """
-    builder.processor = processor@{ input ->
+    builder.processor = processor@{ input, conversation ->
         flow {
             val options = LLMOptions(
                 responseFormat = "json_object",
                 systemPrompt = prompt,
                 temperature = 0.7
             )
-            val responses = provider.generate(input.content, options).toList()
+            val responses = provider.generate(conversation.messages, options).toList()
             val generatedSql = json.decodeFromString<GeneratedSql>((responses[2] as LLMMessage.AssistantMessage).content)
 
             emit(LLMMessage.SystemMessage("Query Template: ${generatedSql.sqlTemplate}\nQuery Parameters: ${generatedSql.parameters}"))

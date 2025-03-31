@@ -78,7 +78,7 @@ fun Agent.Companion.withWorkflowPlanner(
         name = "Workflow Planner for ${defaultAgent.name}"
         description = "Analyzes requests and creates an execution plan."
 
-        processor = { message ->
+        processor = { message, conversation ->
             flow {
                 val planningOptions = LLMOptions(
                     systemPrompt = workflowPlanPrompt,
@@ -90,7 +90,7 @@ fun Agent.Companion.withWorkflowPlanner(
 
                 try {
                     // 1. Call LLM to get the plan
-                    val planResponseText = provider.generate(message.content, planningOptions)
+                    val planResponseText = provider.generate(conversation.messages, planningOptions)
                         .toList()
                         .filterIsInstance<LLMMessage.AssistantMessage>()
                         .lastOrNull()?.content // Use lastOrNull for safety
@@ -129,14 +129,14 @@ fun Agent.Companion.withWorkflowPlanner(
                             else -> "Unknown planning issue." // Should not happen
                         }
                         emit(LLMMessage.SystemMessage(content = "Planning failed ($reason). Processing with default agent."))
-                        defaultAgent.process(message).collect(::emit)
+                        defaultAgent.process(message, conversation).collect(::emit)
                     }
 
                 } catch (e: Exception) {
                     // Handle errors during LLM call or general processing
                     emit(LLMMessage.SystemMessage(content = "Error during planning/execution: ${e.message}. Attempting to process with default agent."))
                     try {
-                        defaultAgent.process(message).collect(::emit)
+                        defaultAgent.process(message, conversation).collect(::emit)
                     } catch (e2: Exception) {
                         emit(LLMMessage.SystemMessage(content = "Failed to process with default agent after planning error: ${e2.message}"))
                     }

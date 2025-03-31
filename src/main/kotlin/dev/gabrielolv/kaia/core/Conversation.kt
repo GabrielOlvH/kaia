@@ -7,7 +7,7 @@ import dev.gabrielolv.kaia.llm.LLMMessage
  */
 data class Conversation(
     val id: String,
-    val messages: MutableList<LLMMessage>,
+    val messages: MutableList<LLMMessage> = mutableListOf(),
     // Store the currently active workflow, if any
     var currentWorkflow: Workflow? = null,
     // Track the index of the step being executed or last executed

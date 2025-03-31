@@ -29,6 +29,7 @@ dependencies {
     implementation(libs.exposed.jdbc)
     implementation(libs.exposed.datetime)
     implementation("com.github.jsqlparser:jsqlparser:4.9")
+    implementation("com.h2database:h2:2.3.232")
 
     // Test dependencies
     testImplementation(libs.kotest.runner.junit5)
@@ -36,7 +37,16 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
     // https://mvnrepository.com/artifact/com.h2database/h2
-    implementation("com.h2database:h2:2.3.232")
+    testImplementation("io.kotest:kotest-runner-junit5:5.8.0") // Or latest
+    testImplementation("io.kotest:kotest-assertions-core:5.8.0")
+    testImplementation("io.kotest:kotest-property:5.8.0")
+
+    // Ktor Client Mock Engine
+    testImplementation("io.ktor:ktor-client-mock:3.1.1") // Match your Ktor version
+
+    // Ktor Content Negotiation (needed for request body check)
+    testImplementation("io.ktor:ktor-client-content-negotiation:3.1.1")
+    testImplementation("io.ktor:ktor-serialization-kotlinx-json:3.1.1")
 }
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
