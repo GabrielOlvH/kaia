@@ -112,8 +112,8 @@ fun Agent.Companion.withDatabaseAccess(
                 systemPrompt = prompt,
                 temperature = 0.7
             )
-            val responses = provider.generate(conversation.messages, options).toList()
-            val generatedSql = json.decodeFromString<GeneratedSql>((responses[2] as LLMMessage.AssistantMessage).content)
+            val response = provider.generate(conversation.messages, options).toList().last { it is LLMMessage.AssistantMessage }
+            val generatedSql = json.decodeFromString<GeneratedSql>((response as LLMMessage.AssistantMessage).content)
 
             emit(LLMMessage.SystemMessage("Query Template: ${generatedSql.sqlTemplate}\nQuery Parameters: ${generatedSql.parameters}"))
 
