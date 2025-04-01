@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "dev.gabrielolv"
-version = "0.2.2"
+version = "1.0.1"
 
 repositories {
     mavenCentral()
