@@ -1,11 +1,7 @@
 package dev.gabrielolv.kaia.core
 
 import dev.gabrielolv.kaia.llm.LLMMessage
-import dev.gabrielolv.kaia.llm.LLMProvider
 import dev.gabrielolv.kaia.utils.nextThreadId
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.channelFlow
@@ -15,12 +11,10 @@ import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 
 class HandoffManager(
-    val orchestrator: Orchestrator,
-    private val provider: LLMProvider
+    val orchestrator: Orchestrator
 ) {
     private val conversations = ConcurrentHashMap<String, Conversation>()
     private val conversationLocks = ConcurrentHashMap<String, Mutex>()
-    private val managerScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     /**
      * Start a new conversation. The initial agent is now the planner.
@@ -60,7 +54,7 @@ class HandoffManager(
                 conversation.messages.add(LLMMessage.UserMessage(content = message.content))
 
                 try {
-                    orchestrator.processWithAgent(plannerAgentId, message)
+                    orchestrator.processWithAgent(plannerAgentId, message, conversation)
                         .catch { e ->
                             val errorMsg = LLMMessage.SystemMessage(content = "Workflow failed: ${e.message}")
                             send(errorMsg)
@@ -100,6 +94,7 @@ class HandoffManager(
     ): Flow<LLMMessage> = channelFlow {
         val conversation = conversations[conversationId] ?: run {
             send(LLMMessage.SystemMessage(content = "Error: Conversation $conversationId not found for workflow execution."))
+            close()
             return@channelFlow
         }
 
@@ -132,7 +127,7 @@ class HandoffManager(
                 val stepMessage = initialMessage.copy(content = stepInputContent, recipient = agent.id)
 
                 val stepResults = mutableListOf<LLMMessage>()
-                agent.process(stepMessage)
+                agent.process(stepMessage, conversation)
                     .catch { e ->
                         step.status = StepStatus.FAILED
                         step.error = "Agent ${agent.id} failed: ${e.message}"
@@ -148,7 +143,6 @@ class HandoffManager(
                 step.resultSummary =
                     stepResults.filterIsInstance<LLMMessage.AssistantMessage>().lastOrNull()?.content?.take(100)
                         ?: "Completed"
-                previousStepResult = stepResults
                 conversation.currentStepIndex++
             } catch (e: Exception) {
                 for (i in (stepIndex + 1) until workflow.steps.size) {

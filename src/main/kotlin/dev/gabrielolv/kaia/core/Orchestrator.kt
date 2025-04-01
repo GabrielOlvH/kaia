@@ -38,27 +38,35 @@ class Orchestrator(
      */
     fun getAgent(agentId: String): Agent? = agents[agentId]
 
-    /**
-     * Process a message through a specific agent
-     */
-    suspend fun processWithAgent(agentId: String, message: Message): Flow<LLMMessage> {
+    suspend fun processWithAgent(
+        agentId: String,
+        message: Message,
+        conversation: Conversation // Added conversation
+    ): Flow<LLMMessage> {
         val agent = agents[agentId] ?: throw IllegalArgumentException("Agent $agentId not found")
-        return agent.process(message)
+        // Pass conversation to agent.process
+        return agent.process(message, conversation)
     }
+
 
     /**
      * Send a message to multiple agents and collect their responses
      */
-    fun broadcast(message: Message, agentIds: List<String>): Flow<LLMMessage> = flow {
+    fun broadcast(
+        conversation: Conversation, // Pass conversation directly
+        message: Message,
+        agentIds: List<String>
+    ): Flow<LLMMessage> = flow {
         agentIds.map { agentId ->
             scope.async {
                 try {
                     val agent = agents[agentId] ?: throw IllegalArgumentException("Agent $agentId not found")
-                    agent.process(message.copy(recipient = agentId)).collect { emit(it) }
+                    // Pass conversation to agent.process
+                    agent.process(message.copy(recipient = agentId), conversation).collect { emit(it) }
                 } catch (e: Exception) {
                     emit(
                         LLMMessage.SystemMessage(
-                            content = "Error processing message by agent $agentId: ${e.message}"
+                            content = "Error processing broadcast message by agent $agentId: ${e.message}"
                         )
                     )
                 }

@@ -1,5 +1,6 @@
 package dev.gabrielolv.kaia.core.agents
 
+import dev.gabrielolv.kaia.core.Conversation
 import dev.gabrielolv.kaia.core.Message
 import dev.gabrielolv.kaia.llm.LLMMessage
 import kotlinx.coroutines.flow.Flow
@@ -18,7 +19,7 @@ interface Agent {
      * Process a message and return a flow of messages
      * This allows for streaming responses and intermediate steps like tool calls
      */
-    fun process(message: Message): Flow<LLMMessage>
+    fun process(message: Message, conversation: Conversation): Flow<LLMMessage>
 
     companion object {
         /**
@@ -37,9 +38,9 @@ class AgentBuilder {
     var name: String = ""
     var description: String = ""
 
-    var processor: (Message) -> Flow<LLMMessage> = { message ->
+    var processor: (Message, Conversation) -> Flow<LLMMessage> = { message, conversation ->
         flow {
-            emit(LLMMessage.SystemMessage(content = "Default response to: ${message.content}"))
+            emit(LLMMessage.SystemMessage(content = "Default response to: ${message.content} in conv ${conversation.id}"))
         }
     }
 
@@ -55,10 +56,10 @@ private class BaseAgent(
     override val id: String,
     override val name: String,
     override val description: String,
-    private val processor: (Message) -> Flow<LLMMessage>
+    private val processor: (Message, Conversation) -> Flow<LLMMessage>
 ) : Agent {
 
-    override fun process(message: Message): Flow<LLMMessage> {
-        return processor(message)
+    override fun process(message: Message, conversation: Conversation): Flow<LLMMessage> {
+        return processor(message, conversation)
     }
 }

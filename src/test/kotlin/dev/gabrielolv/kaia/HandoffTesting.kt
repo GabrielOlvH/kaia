@@ -120,8 +120,8 @@ class WorkflowExecutionTests : FunSpec({
     orchestrator.addAgent(techSupportAgent)
     orchestrator.addAgent(salesAgent)
     val handoffManager = HandoffManager(
-        orchestrator = orchestrator,
-        provider = reasoningProvider // Pass provider for verification step
+        orchestrator = orchestrator
+        // Pass provider for verification step
     )
     val plannerAgent = Agent.withWorkflowPlanner(
         handoffManager = handoffManager, // Temp manager needed for DB access, ID will be set below
@@ -298,14 +298,13 @@ class WorkflowExecutionTests : FunSpec({
                 id = "failing_agent"
                 name = "Failing Agent"
                 description = "This agent always fails."
-                processor = { _ -> throw RuntimeException("Intentional failure for testing!") }
+                processor = { _, _ -> throw RuntimeException("Intentional failure for testing!") }
             }
             orchestrator.addAgent(failingAgent) // Add to orchestrator *for this test*
 
             // Update planner's agent database view if necessary (or recreate planner)
             val managerForFailureTest = HandoffManager(
-                orchestrator = orchestrator,
-                provider = reasoningProvider
+                orchestrator = orchestrator
             )
 
             val plannerAgentForFailureTest = Agent.withWorkflowPlanner(

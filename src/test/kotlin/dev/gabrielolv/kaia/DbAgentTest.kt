@@ -1,11 +1,13 @@
 package dev.gabrielolv.kaia
 
 // import io.kotest.assertions.throwables.shouldThrow // Keep for validation errors
+import dev.gabrielolv.kaia.core.Conversation
 import dev.gabrielolv.kaia.core.Message
 import dev.gabrielolv.kaia.core.agents.Agent
 import dev.gabrielolv.kaia.core.agents.withDatabaseAccess
 import dev.gabrielolv.kaia.llm.LLMMessage
 import dev.gabrielolv.kaia.llm.LLMProvider
+import dev.gabrielolv.kaia.utils.nextThreadId
 import io.kotest.assertions.fail
 import io.kotest.core.annotation.Tags
 import io.kotest.core.spec.style.FunSpec
@@ -50,6 +52,8 @@ class DatabaseAgentIntegrationTest : FunSpec({
 
     // Allowed tables for most tests
     val allowedTables = listOf(Users, Products)
+
+
 
     beforeSpec {
         // Check for API key before running any tests in this spec
@@ -120,7 +124,7 @@ class DatabaseAgentIntegrationTest : FunSpec({
         }
 
         // Act
-        val results = agent.process(Message(content="Show all users first_names and emails")).toList()
+        val results = agent.process(Message(content="Show all users first_names and emails"), Conversation(nextThreadId)).toList()
 
         // Assert
         // We expect 2 messages: System(Template/Params), System(Results)
@@ -157,7 +161,7 @@ class DatabaseAgentIntegrationTest : FunSpec({
         val userEmail = "bob@example.com"
 
         // Act
-        val results = agent.process(Message(content="Find the first_name of the user with email $userEmail")).toList()
+        val results = agent.process(Message(content="Find the first_name of the user with email $userEmail"), Conversation(nextThreadId)).toList()
 
         // Assert
         results.size shouldBe 2
@@ -191,7 +195,7 @@ class DatabaseAgentIntegrationTest : FunSpec({
         // Ask the LLM to do something forbidden. It *should* refuse or generate
         // only SELECT, but if it generates UPDATE/DELETE, validation should catch it.
         try {
-            val results = agent.process(Message(content="Try to update Alice's email to hacked@example.com")).toList()
+            val results = agent.process(Message(content="Try to update Alice's email to hacked@example.com"), Conversation(nextThreadId)).toList()
             // If the LLM refuses or generates valid SELECT, the test might pass without error,
             // or fail if the results don't match expectations.
             // We ideally want the validation to trigger.
@@ -235,7 +239,7 @@ class DatabaseAgentIntegrationTest : FunSpec({
         // Act & Assert
         // Ask the LLM to access the disallowed 'secrets' table.
         try {
-            val results = agent.process(Message(content="Get data from the secrets table")).toList()
+            val results = agent.process(Message(content="Get data from the secrets table"), Conversation(nextThreadId)).toList()
 
             val templateMsg = results.getOrNull(0) as? LLMMessage.SystemMessage
             val resultMsg = results.getOrNull(1) as? LLMMessage.SystemMessage
@@ -267,7 +271,7 @@ class DatabaseAgentIntegrationTest : FunSpec({
         val nonExistentfirst_name = "Charlie"
 
         // Act
-        val results = agent.process(Message(content="Find user first_named $nonExistentfirst_name")).toList()
+        val results = agent.process(Message(content="Find user first_named $nonExistentfirst_name"), Conversation(nextThreadId)).toList()
 
         // Assert
         results.size shouldBe 2
@@ -296,7 +300,7 @@ class DatabaseAgentIntegrationTest : FunSpec({
         val trickyPrompt = "Select the 'nam' column (misspelled) from users where the id is 1"
 
         // Act
-        val results = agent.process(Message(content=trickyPrompt)).toList()
+        val results = agent.process(Message(content=trickyPrompt), Conversation(nextThreadId)).toList()
 
         // Assert
         results.size shouldBe 2 // Template message + Error message
@@ -339,7 +343,7 @@ class DatabaseAgentIntegrationTest : FunSpec({
         ) { id = "db_agent" }
 
         // Act
-        val results = agent.process(Message(content="Show product WDG-001 price")).toList()
+        val results = agent.process(Message(content="Show product WDG-001 price"), Conversation(nextThreadId)).toList()
 
         // Assert
         results.size shouldBe 2
