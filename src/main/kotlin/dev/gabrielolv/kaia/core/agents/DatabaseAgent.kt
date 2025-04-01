@@ -29,7 +29,7 @@ private fun getDdlForTables(tables: List<Table>): String {
         ddlCache.computeIfAbsent(table.tableName) {
             val db = Database.connect("jdbc:h2:mem:test;DB_CLOSE_DELAY=-1;", driver = "org.h2.Driver")
             transaction(db) {
-                table.ddl.joinToString("\n").also { connection.close() }
+                table.ddl.joinToString("\n")
             }
         }
     }
