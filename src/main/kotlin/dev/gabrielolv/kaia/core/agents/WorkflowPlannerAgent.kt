@@ -11,8 +11,6 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
 import kotlinx.serialization.json.Json
 
-// Assuming WorkflowPlanResponse and WorkflowStepDescription are defined as above
-
 fun Agent.Companion.withWorkflowPlanner(
     handoffManager: HandoffManager,
     provider: LLMProvider,
@@ -93,7 +91,7 @@ fun Agent.Companion.withWorkflowPlanner(
                     val planResponseText = provider.generate(conversation.messages, planningOptions)
                         .toList()
                         .filterIsInstance<LLMMessage.AssistantMessage>()
-                        .lastOrNull()?.content // Use lastOrNull for safety
+                        .lastOrNull()?.content
 
                     // 2. Parse the plan
                     val planResponse: WorkflowPlanResponse? = planResponseText?.let { text ->
@@ -101,7 +99,7 @@ fun Agent.Companion.withWorkflowPlanner(
                             json.decodeFromString<WorkflowPlanResponse>(text)
                         } catch (e: Exception) {
                             emit(LLMMessage.SystemMessage(content = "Error parsing execution plan: ${e.message}. Proceeding with default agent."))
-                            null // Parsing failed
+                            null
                         }
                     }
 
@@ -118,22 +116,20 @@ fun Agent.Companion.withWorkflowPlanner(
                         val currentConversationId = message.conversationId
                         // 5. Delegate execution to HandoffManager
                         handoffManager.executeWorkflow(currentConversationId, workflow, message)
-                            .collect(::emit) // Emit messages from the workflow execution
+                            .collect(::emit)
 
                     } else {
                         // 6. Planning failed, plan was empty, or LLM response was missing
                         val reason = when {
                             planResponseText == null -> "LLM did not provide a response."
-                            planResponse == null -> "Plan parsing failed." // Already emitted specific error
-                            planResponse.workflow.isEmpty() -> "LLM returned an empty workflow."
-                            else -> "Unknown planning issue." // Should not happen
+                            planResponse == null -> "Plan parsing failed."
+                            else -> "Unknown planning issue."
                         }
                         emit(LLMMessage.SystemMessage(content = "Planning failed ($reason). Processing with default agent."))
                         defaultAgent.process(message, conversation).collect(::emit)
                     }
 
                 } catch (e: Exception) {
-                    // Handle errors during LLM call or general processing
                     emit(LLMMessage.SystemMessage(content = "Error during planning/execution: ${e.message}. Attempting to process with default agent."))
                     try {
                         defaultAgent.process(message, conversation).collect(::emit)

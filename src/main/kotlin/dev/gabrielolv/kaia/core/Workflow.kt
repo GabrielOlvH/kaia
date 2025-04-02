@@ -7,7 +7,6 @@ data class WorkflowStep(
     val agentId: String,
     val action: String, // Description of the task for the agent
     var status: StepStatus = StepStatus.PENDING,
-    var resultSummary: String? = null, // Optional summary of the step's result
     var error: String? = null
 )
 

@@ -2,10 +2,7 @@ package dev.gabrielolv.kaia.core
 
 import dev.gabrielolv.kaia.llm.LLMMessage
 import dev.gabrielolv.kaia.utils.nextThreadId
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.channelFlow
-import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
@@ -70,10 +67,11 @@ class HandoffManager(
                                 conversation.messages.add(errorMsg)
                             }
                         }
-                        .collect { llmMessage ->
+                        .onEach { llmMessage ->
                             send(llmMessage)
                             conversation.messages.add(llmMessage)
                         }
+                        .collect()
                 } catch (e: Exception) {
                     val errorMsg = LLMMessage.SystemMessage(content = "Failed to start planner: ${e.message}")
                     send(errorMsg)
@@ -100,7 +98,6 @@ class HandoffManager(
 
         conversation.currentWorkflow = workflow
         conversation.currentStepIndex = 0
-        var previousStepResult: List<LLMMessage>? = null
         while (conversation.currentStepIndex < workflow.steps.size) {
             val stepIndex = conversation.currentStepIndex
             val step = workflow.steps[stepIndex]
@@ -119,9 +116,6 @@ class HandoffManager(
             try {
                 val stepInputContent = buildString {
                     append("Original Request: ${initialMessage.content}\n")
-                    if (stepIndex > 0 && workflow.steps[stepIndex - 1].resultSummary != null) {
-                        append("Previous Step (${workflow.steps[stepIndex - 1].agentId}) Result Summary: ${workflow.steps[stepIndex - 1].resultSummary}\n")
-                    }
                     append("Your Task: ${step.action}")
                 }
                 val stepMessage = initialMessage.copy(content = stepInputContent, recipient = agent.id)
@@ -140,9 +134,6 @@ class HandoffManager(
                     }
 
                 step.status = StepStatus.COMPLETED
-                step.resultSummary =
-                    stepResults.filterIsInstance<LLMMessage.AssistantMessage>().lastOrNull()?.content?.take(100)
-                        ?: "Completed"
                 conversation.currentStepIndex++
             } catch (e: Exception) {
                 for (i in (stepIndex + 1) until workflow.steps.size) {
@@ -152,9 +143,7 @@ class HandoffManager(
             }
         }
 
-        if (conversation.currentStepIndex == workflow.steps.size && workflow.steps.last().status == StepStatus.COMPLETED) {
-            send(LLMMessage.SystemMessage(content = "Workflow completed successfully."))
-        } else {
+        if (conversation.currentStepIndex != workflow.steps.size || workflow.steps.last().status != StepStatus.COMPLETED) {
             send(LLMMessage.SystemMessage(content = "Workflow finished with errors or was interrupted."))
         }
     }
