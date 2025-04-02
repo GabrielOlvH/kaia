@@ -44,7 +44,6 @@ class Orchestrator(
         conversation: Conversation // Added conversation
     ): Flow<LLMMessage> {
         val agent = agents[agentId] ?: throw IllegalArgumentException("Agent $agentId not found")
-        // Pass conversation to agent.process
         return agent.process(message, conversation)
     }
 
@@ -61,7 +60,6 @@ class Orchestrator(
             scope.async {
                 try {
                     val agent = agents[agentId] ?: throw IllegalArgumentException("Agent $agentId not found")
-                    // Pass conversation to agent.process
                     agent.process(message.copy(recipient = agentId), conversation).collect { emit(it) }
                 } catch (e: Exception) {
                     emit(
