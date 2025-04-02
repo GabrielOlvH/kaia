@@ -106,7 +106,7 @@ class OpenAIToolsProvider(
     private fun LLMMessage.toOpenAIToolMessage(): Message = when (this) {
         is LLMMessage.UserMessage -> Message("user", content = content)
         is LLMMessage.AssistantMessage -> Message("assistant", content = content)
-        is LLMMessage.SystemMessage -> Message("system", content = content)
+        is LLMMessage.SystemMessage -> Message("assistant", content = content)
         is LLMMessage.ToolCallMessage -> {
             Message(
                 role = "assistant",
