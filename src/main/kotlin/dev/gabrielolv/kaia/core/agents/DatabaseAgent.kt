@@ -105,7 +105,7 @@ fun Agent.Companion.withDatabaseAccess(
         ${getDdlForTables(tables)}
     ```
     """
-    builder.processor = processor@{ input, conversation ->
+    builder.processor = processor@{ _, conversation ->
         flow {
             val options = LLMOptions(
                 responseFormat = "json_object",
