@@ -120,7 +120,6 @@ class HandoffManager(
                 }
                 val stepMessage = initialMessage.copy(content = stepInputContent, recipient = agent.id)
 
-                val stepResults = mutableListOf<LLMMessage>()
                 agent.process(stepMessage, conversation)
                     .catch { e ->
                         step.status = StepStatus.FAILED
@@ -130,7 +129,7 @@ class HandoffManager(
                     }
                     .collect { resultMessage ->
                         send(resultMessage)
-                        stepResults.add(resultMessage)
+                        conversation.append(resultMessage)
                     }
 
                 step.status = StepStatus.COMPLETED

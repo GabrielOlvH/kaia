@@ -14,7 +14,11 @@ data class Conversation(
     var currentStepIndex: Int = -1,
     // Keep handoffs for historical/audit purposes if needed
     val handoffs: MutableList<Handoff> = mutableListOf()
-)
+) {
+    fun append(message: LLMMessage) {
+        messages.add(message)
+    }
+}
 
 // Handoff class remains the same for now
 data class Handoff(
