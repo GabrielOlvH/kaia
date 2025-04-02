@@ -71,7 +71,7 @@ private fun runQuery(database: Database, generatedSql: GeneratedSql): LLMMessage
     rows?.let {
         val resultsAsString =
             rows.joinToString("\n") { entry -> entry.entries.joinToString { "${it.key}=${it.value}" } }
-        return LLMMessage.AssistantMessage("Query Results:\n$resultsAsString")
+        return LLMMessage.SystemMessage("Query Results:\n$resultsAsString")
     }
 
     return LLMMessage.SystemMessage("Unreachable. If you see this, cry.")
@@ -115,7 +115,7 @@ fun Agent.Companion.withDatabaseAccess(
             val response = provider.generate(conversation.messages, options).toList().last { it is LLMMessage.AssistantMessage }
             val generatedSql = json.decodeFromString<GeneratedSql>((response as LLMMessage.AssistantMessage).content)
 
-            emit(LLMMessage.AssistantMessage("Query Template: ${generatedSql.sqlTemplate}\nQuery Parameters: ${generatedSql.parameters}"))
+            emit(LLMMessage.SystemMessage("Query Template: ${generatedSql.sqlTemplate}\nQuery Parameters: ${generatedSql.parameters}"))
 
 //            val validation = validateAndAnalyzeSelectQuery(generatedSql.sqlTemplate, database, tables.map { it.tableName }.toSet())
 //
