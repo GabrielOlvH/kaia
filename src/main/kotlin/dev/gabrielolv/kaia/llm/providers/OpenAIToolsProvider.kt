@@ -106,7 +106,7 @@ class OpenAIToolsProvider(
     private fun LLMMessage.toOpenAIToolMessage(): Message = when (this) {
         is LLMMessage.UserMessage -> Message("user", content = content)
         is LLMMessage.AssistantMessage -> Message("assistant", content = content)
-        is LLMMessage.SystemMessage -> Message("assistant", content = content)
+        is LLMMessage.SystemMessage -> Message("system", content = content)
         is LLMMessage.ToolCallMessage -> {
             Message(
                 role = "assistant",
@@ -194,7 +194,7 @@ class OpenAIToolsProvider(
         systemMessage?.let { initialApiMessages.add(it) }
 
         // Get conversation history (excluding system messages)
-        val conversationMessages = messages
+        val conversationMessages = messages.filter { it !is LLMMessage.SystemMessage }
 
         // Apply history size limit
         val trimmedConversation = options.historySize?.let { size ->
