@@ -19,7 +19,7 @@ fun Agent.Companion.withDirectorAgent(
 
     val directorPrompt = """
     You are a sophisticated AI orchestrator acting as a step-by-step director.
-    Your task is to analyze the user's original request and the conversation history (including the results of previous steps) to determine the single best *next* action required, or to determine if the request is fully completed.
+    Your task is to analyze the user's original request and the conversation history to determine the single best *next* action, or if the request is complete, OR if you need clarification from the user.
 
     Available specialized agents:
     $agentCatalog
@@ -28,48 +28,55 @@ fun Agent.Companion.withDirectorAgent(
     Original User Request: {{original_request}}
 
     Based on the original request and the history:
-    1. Evaluate if the original request has been fully addressed by the history.
-    2. If yes, respond that the task is complete.
-    3. If no, determine the single most logical *next* step to progress towards fulfilling the original request.
-    4. Identify the best agent (from the catalog or the default agent) to perform this single step.
-    5. Define the specific action for that agent.
+    1. Evaluate if the original request is fully addressed. If yes, set "isComplete": true.
+    2. Evaluate if you have enough information to proceed with the *next logical step*.
+       - If yes, determine the single best agent and action for that step. Set "isComplete": false, "waitForUserInput": false.
+    3. Evaluate if you are missing crucial information from the user to proceed.
+       - If yes, determine the agent/action needed to *ask the user for clarification*. Set "isComplete": false, and crucially, set "waitForUserInput": true.
 
     Respond ONLY with a JSON object in the following format:
     {
-      "nextStep": { // Include this object ONLY if another step is needed
-        "agentId": "[ID of the agent for the next step]",
-        "action": "[Specific action for the agent]",
-        "reason": "[Brief reason for choosing this agent/action]"
+      "nextStep": { // Include ONLY if isComplete is false. Contains the action (either progressing or asking clarification).
+        "agentId": "[ID of the agent for the next step/clarification]",
+        "action": "[Specific action OR the question to ask the user]",
+        "reason": "[Brief reason for this step/question]"
       },
       "isComplete": [true if the original request is fully addressed, false otherwise],
-      "overallReason": "[Brief explanation for why the task is complete or why the next step is chosen]"
+      "waitForUserInput": [true ONLY if the nextStep is asking the user for information, false otherwise],
+      "overallReason": "[Explanation for completion, next step, or why clarification is needed]"
     }
 
-    Example (Mid-Execution):
-    History: User asked to draft email and find meeting time. Email draft generated.
-    Original Request: "Draft an email about project delay, find 30min slot next week, send invite."
+    Example (Needs Clarification):
+    History: User: "Book a flight to Paris." Assistant: (Previous step asked 'Which dates?')
+    Original Request: "Book a flight to Paris."
     Response:
     {
       "nextStep": {
-        "agentId": "calendar-scheduler",
-        "action": "Find a 30-minute meeting slot available for the team next week, based on the project delay context.",
-        "reason": "Email is drafted, next logical step is finding the meeting time."
+        "agentId": "${fallbackAgent.id}", // Or a specific 'user-interaction' agent
+        "action": "Ask the user for their desired departure and return dates for the Paris flight.",
+        "reason": "Cannot book flight without dates."
       },
       "isComplete": false,
-      "overallReason": "The scheduling part of the request is pending."
+      "waitForUserInput": true, // Signal to pause after asking
+      "overallReason": "Missing necessary date information from the user to proceed with booking."
     }
 
-    Example (Completion):
-    History: User asked for weather. Weather agent provided forecast.
-    Original Request: "What's the weather like?"
+    Example (Proceeding after Clarification):
+    History: User: "Book flight to Paris." Assistant: "Which dates?" User: "Next Tuesday to Friday."
+    Original Request: "Book a flight to Paris."
     Response:
     {
-      "nextStep": null,
-      "isComplete": true,
-      "overallReason": "The weather forecast has been provided as requested."
+      "nextStep": {
+        "agentId": "flight-booker",
+        "action": "Find flight options to Paris for next Tuesday to Friday.",
+        "reason": "User provided dates, now search for flights."
+      },
+      "isComplete": false,
+      "waitForUserInput": false,
+      "overallReason": "Proceeding with flight search using provided dates."
     }
 
-    Now, analyze the current state and decide the next action or completion.
+    Now, analyze the current state and decide the next action, completion, or if clarification is needed.
     """
 
     val builder = AgentBuilder().apply(block)
@@ -80,9 +87,7 @@ fun Agent.Companion.withDirectorAgent(
 
     builder.processor = { message, conversation ->
         flow {
-            val originalRequest = conversation.messages
-                .filterIsInstance<LLMMessage.UserMessage>()
-                .firstOrNull()?.content ?: message.content // Fallback
+            val originalRequest = conversation.originalUserRequest
 
             val filledPrompt = directorPrompt
                 .replace("{{original_request}}", originalRequest)

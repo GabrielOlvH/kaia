@@ -218,28 +218,27 @@ class HandoffManager(
                         executedStepRecord.status = StepStatus.FAILED
                         executedStepRecord.error = "Agent ${agentToExecute.id} failed: ${e.message}"
                         scope.send(LLMMessage.SystemMessage("Workflow Error (Step $currentStep): ${executedStepRecord.error}"))
-                        throw e // Re-throw to break the loop
+                        throw e
                     }
                     .collect { resultMessage ->
-                        scope.send(resultMessage) // Emit agent's messages
-                        // Optionally summarize result for the record
-                        // executedStepRecord.resultSummary = resultMessage.content // (Needs refinement)
+                        scope.send(resultMessage)
                     }
 
                 executedStepRecord.status = StepStatus.COMPLETED
                 scope.send(LLMMessage.SystemMessage("Step $currentStep completed successfully."))
                 currentStep++ // Move to the next potential step
 
+                if (directorResponse.waitForUserInput) {
+                    scope.send(LLMMessage.SystemMessage("Pausing execution. Waiting for user input."))
+                    break
+                }
             } catch (e: Exception) {
-                // Error already recorded and sent by the catch block above.
-                // Break the loop on agent execution failure.
                 break
             }
         } // End while loop
 
         if (currentStep > maxSteps) {
             scope.send(LLMMessage.SystemMessage("Reached maximum step limit ($maxSteps). Stopping execution."))
-            // Mark last step as potentially failed or incomplete?
         }
     }
 

@@ -46,10 +46,8 @@ data class NextStepInfo(
 
 @Serializable
 data class DirectorResponse(
-    // If not null, this is the next step to execute
     val nextStep: NextStepInfo? = null,
-    // Indicates if the overall goal is considered achieved
     val isComplete: Boolean,
-    // Overall reason for completion or choosing the next step
+    val waitForUserInput: Boolean = false,
     val overallReason: String? = null
 )

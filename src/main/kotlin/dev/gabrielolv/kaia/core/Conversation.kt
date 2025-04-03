@@ -16,7 +16,7 @@ data class ExecutedStep(
 data class Conversation(
     val id: String,
     val messages: MutableList<LLMMessage> = mutableListOf(),
-    var originalUserRequest: String? = null, // Store the initial request
+    var originalUserRequest: String, // Store the initial request
     val executedSteps: MutableList<ExecutedStep> = mutableListOf(), // Track history
     // Remove workflow/step index if they existed
     // var currentWorkflow: Workflow? = null,
