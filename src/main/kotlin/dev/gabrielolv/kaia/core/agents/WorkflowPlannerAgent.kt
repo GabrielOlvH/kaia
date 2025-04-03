@@ -23,7 +23,6 @@ fun Agent.Companion.withWorkflowPlanner(
         "${it.key}: ${it.value}"
     }
 
-    // Create a workflow planning prompt
     val workflowPlanPrompt = """
     You are a sophisticated AI orchestrator. Your task is to analyze the user's request and create an execution plan.
 
