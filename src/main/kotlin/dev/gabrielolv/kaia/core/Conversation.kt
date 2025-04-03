@@ -2,18 +2,26 @@ package dev.gabrielolv.kaia.core
 
 import dev.gabrielolv.kaia.llm.LLMMessage
 
-/**
- * Represents a conversation, potentially involving a multi-step workflow.
- */
+
+// Simple structure to track executed steps if needed
+data class ExecutedStep(
+    val agentId: String,
+    val action: String,
+    var status: StepStatus = StepStatus.PENDING,
+    var error: String? = null,
+    val resultSummary: String? = null // Optional summary of step result
+)
+
+// Modify Conversation to hold original request and executed steps
 data class Conversation(
     val id: String,
     val messages: MutableList<LLMMessage> = mutableListOf(),
-    // Store the currently active workflow, if any
-    var currentWorkflow: Workflow? = null,
-    // Track the index of the step being executed or last executed
-    var currentStepIndex: Int = -1,
-    // Keep handoffs for historical/audit purposes if needed
-    val handoffs: MutableList<Handoff> = mutableListOf()
+    var originalUserRequest: String? = null, // Store the initial request
+    val executedSteps: MutableList<ExecutedStep> = mutableListOf(), // Track history
+    // Remove workflow/step index if they existed
+    // var currentWorkflow: Workflow? = null,
+    // var currentStepIndex: Int = 0,
+    val handoffs: MutableList<Handoff> = mutableListOf() // Keep handoffs if used elsewhere
 ) {
     fun append(message: LLMMessage) {
         messages.add(message)

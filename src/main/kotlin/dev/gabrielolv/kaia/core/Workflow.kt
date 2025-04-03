@@ -36,3 +36,20 @@ data class WorkflowStepDescription(
     val agentId: String,
     val action: String
 )
+
+@Serializable
+data class NextStepInfo(
+    val agentId: String,
+    val action: String,
+    val reason: String? = null // Reason for *this specific* step
+)
+
+@Serializable
+data class DirectorResponse(
+    // If not null, this is the next step to execute
+    val nextStep: NextStepInfo? = null,
+    // Indicates if the overall goal is considered achieved
+    val isComplete: Boolean,
+    // Overall reason for completion or choosing the next step
+    val overallReason: String? = null
+)
