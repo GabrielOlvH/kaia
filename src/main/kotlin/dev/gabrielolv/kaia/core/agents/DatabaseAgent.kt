@@ -21,16 +21,13 @@ private fun getDdlForTables(tables: List<Table>): String {
     }
 }
 
-
-
-
 fun Agent.Companion.withDatabaseAccess(
     provider: LLMProvider,
     toolManager: ToolManager,
     database: Database,
     tables: List<Table>,
     prompt: String = """
-        You are an AI assistant that translates natural language questions into safe, parameterized SQL query components for a ${database.dialect.name} database.
+        You are a SQL expert that can easily translate natural language questions into safe, parameterized SQL query components for a ${database.dialect.name} database.
         **Instructions:**
         1.  Analyze the user's question and the provided database schema.
         2.  Determine the appropriate SQL query structure and the specific parameter values derived from the user's request.
@@ -59,8 +56,6 @@ fun Agent.Companion.withDatabaseAccess(
         )
 
         return@processor provider.generate(conversation.messages, options)
-
-
     }
 
     return builder.build()

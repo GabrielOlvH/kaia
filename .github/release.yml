@@ -1,0 +1,67 @@
+# .github/workflows/release.yml
+name: Create Release and Publish
+
+on:
+  push:
+    tags:
+      - 'v*.*.*' # Trigger on tags like v1.0.0, v2.3.4
+
+permissions:
+  contents: write # Needed to create GitHub Releases
+  packages: write # Needed to publish release artifacts to GitHub Packages
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 19 # Match your required Java version
+        uses: actions/setup-java@v4
+        with:
+          java-version: '19'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3 # Includes caching
+
+      - name: Extract version from tag
+        id: versioning
+        run: |
+          # Assumes tag is 'vX.Y.Z', extracts 'X.Y.Z'
+          TAG_NAME=${{ github.ref_name }}
+          RELEASE_VERSION=${TAG_NAME#v} # Remove 'v' prefix
+          echo "RELEASE_VERSION=${RELEASE_VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Update version in gradle.properties (optional but good practice)
+        run: |
+          sed -i "s/^libVersion=.*/libVersion=${{ steps.versioning.outputs.RELEASE_VERSION }}/" gradle.properties
+          echo "Updated gradle.properties version to ${{ steps.versioning.outputs.RELEASE_VERSION }}"
+
+      - name: Build
+        run: ./gradlew build -PlibVersion=${{ steps.versioning.outputs.RELEASE_VERSION }}
+        # No need to pass version if you updated gradle.properties and your build reads it
+
+      - name: Publish Release to GitHub Packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Add Sonatype credentials if publishing there
+          # OSSRH_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+          # OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
+        run: ./gradlew publish -PlibVersion=${{ steps.versioning.outputs.RELEASE_VERSION }}
+        # No need to pass version if you updated gradle.properties
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }} # Use the tag that triggered the workflow
+          name: Release ${{ steps.versioning.outputs.RELEASE_VERSION }}
+          body: | # Optional: Add release notes here or use a generator
+            Release of version ${{ steps.versioning.outputs.RELEASE_VERSION }}
+          # files: | # Optional: Upload specific build artifacts to the release page
+          #   build/libs/*.jar
+          #   build/publications/mavenJava/pom-default.xml
+          #   # Add paths to sources.jar, javadoc.jar if generated
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Needs repo write access
