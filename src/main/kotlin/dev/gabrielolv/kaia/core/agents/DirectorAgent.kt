@@ -90,7 +90,8 @@ fun Agent.Companion.withDirectorAgent(
             val planningOptions = LLMOptions(
                 systemPrompt = filledPrompt,
                 responseFormat = "json_object",
-                temperature = 0.1
+                temperature = 0.1,
+                historySize = 20
             )
 
             conversation.messages.add(LLMMessage.UserMessage("Determine next step."))
