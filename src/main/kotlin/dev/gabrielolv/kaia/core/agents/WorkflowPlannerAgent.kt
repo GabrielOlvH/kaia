@@ -18,7 +18,6 @@ fun Agent.Companion.withWorkflowPlanner(
     defaultAgent: Agent,
     json: Json = Json { ignoreUnknownKeys = true; isLenient = true }
 ): Agent {
-    // Build agent catalog string
     val agentCatalog = agentDatabase.entries.joinToString("\n") {
         "${it.key}: ${it.value}"
     }
