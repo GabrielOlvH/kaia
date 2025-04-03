@@ -5,9 +5,6 @@ import dev.gabrielolv.kaia.core.tools.typed.validation.*
 import kotlinx.serialization.json.*
 import kotlin.reflect.KClass
 
-/**
- * Base class for parameter definitions, similar to Exposed's Table class
- */
 abstract class ToolParameters {
     companion object {
         private val registry = mutableMapOf<KClass<out ToolParameters>, ToolParameters>()
