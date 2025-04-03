@@ -128,13 +128,10 @@ internal class OpenAIProvider(
         // Get the relevant conversation history (excluding system messages already handled)
         val conversationMessages = messages.filter { it !is LLMMessage.SystemMessage }
 
-        // Apply history size limit
-        val trimmedConversation = options.historySize?.let { size ->
-            conversationMessages.takeLast(size)
-        } ?: conversationMessages
+
 
         // Convert and add conversation messages
-        trimmedConversation.mapNotNull { it.toOpenAIMessage() }.forEach { apiMessages.add(it) }
+        conversationMessages.map { it.toOpenAIMessage() }.forEach { apiMessages.add(it) }
 
         // Ensure there's at least one non-system message if the original list had them
         if (apiMessages.none { it.role != "system" } && conversationMessages.isNotEmpty()) {

@@ -196,13 +196,9 @@ class OpenAIToolsProvider(
         // Get conversation history (excluding system messages)
         val conversationMessages = messages
 
-        // Apply history size limit
-        val trimmedConversation = options.historySize?.let { size ->
-            conversationMessages.takeLast(size)
-        } ?: conversationMessages
 
         // Convert and add conversation messages
-        trimmedConversation.map { it.toOpenAIToolMessage() }.forEach { initialApiMessages.add(it) }
+        conversationMessages.map { it.toOpenAIToolMessage() }.forEach { initialApiMessages.add(it) }
 
         // Ensure there's content if needed
         if (initialApiMessages.none { it.role != "system" }) {
