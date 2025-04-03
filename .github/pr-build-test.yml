@@ -3,7 +3,12 @@ name: PR Build and Snapshot Publish
 
 on:
   pull_request:
-    branches: [ main ] # Or your default branch
+    branches:
+      - main # Keep this if you also want PRs targeting main to trigger it
+      - dev  # <<< ADD THIS LINE to trigger for PRs targeting dev
+  push: # <<< ADD PUSH TRIGGER
+    branches:
+      - dev # <<< Trigger on pushes directly to dev
 
 permissions:
   contents: read # Needed to check out the code
@@ -30,9 +35,11 @@ jobs:
       - name: Generate Snapshot Version
         id: versioning
         run: |
+          # This logic should still work fine for dev PRs
           BASE_VERSION=$(grep '^libVersion=' gradle.properties | cut -d'=' -f2 | sed 's/-SNAPSHOT//')
           COMMIT_SHA_SHORT=$(git rev-parse --short HEAD)
           PR_NUMBER=${{ github.event.number }}
+          # Example: 1.0.2-pr45-b4e5f6a-SNAPSHOT (if base is 1.0.2)
           SNAPSHOT_VERSION="${BASE_VERSION}-pr${PR_NUMBER}-${COMMIT_SHA_SHORT}-SNAPSHOT"
           echo "SNAPSHOT_VERSION=${SNAPSHOT_VERSION}" >> $GITHUB_OUTPUT
 
