@@ -83,21 +83,22 @@ internal class OpenAIProvider(
         val choices: List<OpenAIChoice>
     )
 
-    private fun LLMMessage.toOpenAIMessage(): OpenAIMessage = when (this) {
+    private fun LLMMessage.toOpenAIMessage(): OpenAIMessage? = when (this) {
         is LLMMessage.UserMessage -> OpenAIMessage("user", content = content)
         is LLMMessage.AssistantMessage -> OpenAIMessage("assistant", content = content)
         is LLMMessage.SystemMessage -> OpenAIMessage("system", content = content)
         is LLMMessage.ToolCallMessage -> {
-            OpenAIMessage(
-                role = "assistant",
-                toolCalls = listOf(
-                    ToolCall(
-                        id = id,
-                        type = "function",
-                        function = FunctionCall(name = name, arguments = json.encodeToString(arguments))
-                    )
-                )
-            )
+//            OpenAIMessage(
+//                role = "assistant",
+//                toolCalls = listOf(
+//                    ToolCall(
+//                        id = id,
+//                        type = "function",
+//                        function = FunctionCall(name = name, arguments = json.encodeToString(arguments))
+//                    )
+//                )
+//            )
+            null
         }
 
         is LLMMessage.ToolResponseMessage -> OpenAIMessage(
