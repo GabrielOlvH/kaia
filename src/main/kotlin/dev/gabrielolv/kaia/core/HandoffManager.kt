@@ -74,12 +74,8 @@ class HandoffManager(
                     send(errorMsg)
                     conversation.append(errorMsg)
                 } finally {
-                    // Check final status after loop finishes or breaks
                     val lastExecuted = conversation.executedSteps.lastOrNull()
                     if (lastExecuted?.status == StepStatus.COMPLETED && conversation.executedSteps.size > 0) {
-                        // Check if the *director* decided it was complete in the last successful cycle
-                        // This logic needs refinement based on how completion is signaled.
-                        // For now, just signal end of process.
                         send(LLMMessage.SystemMessage("Processing complete."))
                     } else if (conversation.executedSteps.any { it.status == StepStatus.FAILED }) {
                         send(LLMMessage.SystemMessage("Processing finished with errors."))
@@ -124,6 +120,8 @@ class HandoffManager(
                     content = "Based on the history and original request, determine the next step or completion.",
                     recipient = directorAgentId
                 )
+                conversation.messages.add(LLMMessage.UserMessage(directorTrigger.content))
+
 
                 directorAgent.process(directorTrigger, conversation)
                     .mapNotNull { msg ->
