@@ -86,7 +86,7 @@ internal class OpenAIProvider(
     private fun LLMMessage.toOpenAIMessage(): OpenAIMessage = when (this) {
         is LLMMessage.UserMessage -> OpenAIMessage("user", content = content)
         is LLMMessage.AssistantMessage -> OpenAIMessage("assistant", content = content)
-        is LLMMessage.SystemMessage -> OpenAIMessage("system", content = content)
+        is LLMMessage.SystemMessage -> OpenAIMessage("assistant", content = content)
         is LLMMessage.ToolCallMessage -> {
             OpenAIMessage(
                 role = "assistant",
@@ -126,7 +126,7 @@ internal class OpenAIProvider(
         systemMessage?.let { apiMessages.add(it) }
 
         // Get the relevant conversation history (excluding system messages already handled)
-        val conversationMessages = messages.filter { it !is LLMMessage.SystemMessage }
+        val conversationMessages = messages
 
 
 

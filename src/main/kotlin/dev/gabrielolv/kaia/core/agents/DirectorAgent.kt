@@ -42,7 +42,7 @@ fun Agent.Companion.withDirectorAgent(
         "reason": "[Brief reason for this step/question]"
       },
       "isComplete": [true if the original request is fully addressed, false otherwise],
-      "waitForUserInput": [true ONLY if the nextStep is asking the user for information, false otherwise],
+      "waitForUserInput": [true if the previous step required more information to be completed, false otherwise],
       "overallReason": "[Explanation for completion, next step, or why clarification is needed]"
     }
 
