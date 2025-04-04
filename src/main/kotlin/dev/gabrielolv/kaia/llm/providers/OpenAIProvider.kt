@@ -113,22 +113,9 @@ internal class OpenAIProvider(
         options: LLMOptions
     ): Flow<LLMMessage> = flow {
         // Prepare messages for the API call, applying history limits
-        val apiMessages = mutableListOf<OpenAIMessage>()
-        var systemMessage: OpenAIMessage? = null
+        val apiMessages = mutableListOf(OpenAIMessage("system", options.systemPrompt))
 
-        // Extract system message first if it exists in the history
-        // Or use the one from options if provided (options override history)
-        val systemPromptFromOptions = options.systemPrompt?.let { OpenAIMessage("system", it) }
-        val systemPromptFromHistory = messages.filterIsInstance<LLMMessage.SystemMessage>().lastOrNull()?.toOpenAIMessage()
-
-        systemMessage = systemPromptFromOptions ?: systemPromptFromHistory
-
-        systemMessage?.let { apiMessages.add(it) }
-
-        // Get the relevant conversation history (excluding system messages already handled)
         val conversationMessages = messages
-
-
 
         // Convert and add conversation messages
         conversationMessages.map { it.toOpenAIMessage() }.forEach { apiMessages.add(it) }
