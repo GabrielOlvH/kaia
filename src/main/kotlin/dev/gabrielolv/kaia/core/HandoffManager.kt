@@ -4,7 +4,6 @@ import dev.gabrielolv.kaia.llm.LLMMessage
 import dev.gabrielolv.kaia.utils.nextThreadId
 import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
@@ -85,158 +84,158 @@ class HandoffManager(
                     }
                 }
             }
-        }.onEach { llmMessage ->
-            if (conversation.messages.lastOrNull() != llmMessage) {
-                conversation.append(llmMessage)
-            }
         }
     }
 
 
-    private fun manageStepByStepExecution(
+    private suspend fun manageStepByStepExecution(
         conversationId: String,
         directorAgentId: String,
         triggerMessage: Message, // The message that initiated this cycle
         scope: ProducerScope<LLMMessage>
     ) {
-        runBlocking {
-            val conversation = conversations[conversationId] ?: return@runBlocking
-            val directorAgent = orchestrator.getAgent(directorAgentId) ?: run {
-                scope.send(LLMMessage.SystemMessage("Error: Director agent '$directorAgentId' not found."))
-                return@runBlocking
-            }
+        val conversation = conversations[conversationId] ?: return
 
-            var currentStep = 1
-            while (currentStep <= maxSteps) {
-                scope.send(LLMMessage.SystemMessage("Director: Deciding next step ($currentStep/$maxSteps)..."))
+        suspend fun emitAndStore(message: LLMMessage) {
+            scope.send(message)
+            conversation.append(message)
+        }
 
-                // 1. Call Director Agent
-                var directorResponse: DirectorResponse? = null
-                var directorFailed = false
-                var lastAssistantMessageContent: String? = null
-                try {
-                    val directorTrigger = triggerMessage.copy(
-                        content = "Based on the history and original request, determine the next step or completion.",
-                        recipient = directorAgentId
-                    )
-                    conversation.messages.add(LLMMessage.UserMessage(directorTrigger.content))
+        val directorAgent = orchestrator.getAgent(directorAgentId) ?: run {
+            emitAndStore(LLMMessage.SystemMessage("Error: Director agent '$directorAgentId' not found."))
+            return
+        }
+
+        var currentStep = 1
+        while (currentStep <= maxSteps) {
+            emitAndStore(LLMMessage.SystemMessage("Director: Deciding next step ($currentStep/$maxSteps)..."))
+
+            // 1. Call Director Agent
+            var directorResponse: DirectorResponse? = null
+            var directorFailed = false
+            var lastAssistantMessageContent: String? = null
+            try {
+                val directorTrigger = triggerMessage.copy(
+                    content = "Based on the history and original request, determine the next step or completion.",
+                    recipient = directorAgentId
+                )
+                conversation.messages.add(LLMMessage.UserMessage(directorTrigger.content))
 
 
-                    directorAgent.process(directorTrigger, conversation)
-                        .mapNotNull { msg ->
-                            // Look for the specific assistant message marked as director response
-                            if (msg is LLMMessage.AssistantMessage) {
-                                lastAssistantMessageContent = msg.content
-                            } else {
-                                scope.send(msg)
-                                null
-                            }
+                directorAgent.process(directorTrigger, conversation)
+                    .mapNotNull { msg ->
+                        // Look for the specific assistant message marked as director response
+                        if (msg is LLMMessage.AssistantMessage) {
+                            lastAssistantMessageContent = msg.content
+                        } else {
+                            scope.send(msg)
+                            null
                         }
-                        .lastOrNull() // Expecting one final JSON response
+                    }
+                    .lastOrNull() // Expecting one final JSON response
 
-                    if (lastAssistantMessageContent != null) {
-                        try {
-                            directorResponse = json.decodeFromString<DirectorResponse>(lastAssistantMessageContent!!)
-                        } catch (e: kotlinx.serialization.SerializationException) {
-                            scope.send(LLMMessage.SystemMessage("Director response was not valid JSON: ${e.message}. Content: '$lastAssistantMessageContent'"))
-                            directorFailed = true
-                        } catch (e: Exception) { // Catch other potential exceptions during parsing
-                            scope.send(LLMMessage.SystemMessage("Error parsing director response: ${e.message}"))
-                            directorFailed = true
-                        }
-                    } else {
-                        scope.send(LLMMessage.SystemMessage("Director did not provide an assistant response."))
+                if (lastAssistantMessageContent != null) {
+                    try {
+                        directorResponse = json.decodeFromString<DirectorResponse>(lastAssistantMessageContent!!)
+                    } catch (e: kotlinx.serialization.SerializationException) {
+                        emitAndStore(LLMMessage.SystemMessage("Director response was not valid JSON: ${e.message}. Content: '$lastAssistantMessageContent'"))
+                        directorFailed = true
+                    } catch (e: Exception) { // Catch other potential exceptions during parsing
+                        emitAndStore(LLMMessage.SystemMessage("Error parsing director response: ${e.message}"))
                         directorFailed = true
                     }
-
-                } catch (e: Exception) {
-                    scope.send(LLMMessage.SystemMessage("Error calling Director agent: ${e.message}"))
+                } else {
+                    scope.send(LLMMessage.SystemMessage("Director did not provide an assistant response."))
                     directorFailed = true
                 }
 
-                if (directorFailed || directorResponse == null) {
-                    scope.send(LLMMessage.SystemMessage("Halting execution due to director failure."))
-                    break
-                }
-
-                scope.send(LLMMessage.SystemMessage("Director decision: ${directorResponse.overallReason ?: "(No reason provided)"}"))
-
-                if (directorResponse.isComplete) {
-                    scope.send(LLMMessage.SystemMessage("Director indicates task is complete."))
-                    break
-                }
-
-                val nextStepInfo = directorResponse.nextStep
-                if (nextStepInfo == null) {
-                    scope.send(LLMMessage.SystemMessage("Director indicates task is not complete, but provided no next step. Halting."))
-                    break
-                }
-
-                // 3. Execute the Step
-                val agentToExecute = orchestrator.getAgent(nextStepInfo.agentId)
-                if (agentToExecute == null) {
-                    scope.send(LLMMessage.SystemMessage("Error: Agent '${nextStepInfo.agentId}' for step $currentStep not found. Halting."))
-                    conversation.executedSteps.add(
-                        ExecutedStep(
-                            agentId = nextStepInfo.agentId,
-                            action = nextStepInfo.action,
-                            status = StepStatus.FAILED,
-                            error = "Agent not found"
-                        )
-                    )
-                    break
-                }
-
-                val executedStepRecord = ExecutedStep(
-                    agentId = agentToExecute.id,
-                    action = nextStepInfo.action,
-                    status = StepStatus.RUNNING
-                )
-                conversation.executedSteps.add(executedStepRecord)
-
-                scope.send(LLMMessage.SystemMessage("Executing Step $currentStep: Agent '${agentToExecute.id}', Action: '${nextStepInfo.action}'"))
-
-                try {
-                    // Prepare input for the agent, including original request and specific action
-                    val stepInputContent = buildString {
-                        append("Original Request: ${conversation.originalUserRequest}\n")
-                        // Maybe include summary of previous steps if needed?
-                        // append("Previous Steps Summary: ...\n")
-                        append("Your Current Task: ${nextStepInfo.action}")
-                    }
-                    val stepMessage = triggerMessage.copy(
-                        content = stepInputContent,
-                        recipient = agentToExecute.id
-                    )
-
-                    // Execute and collect results, sending them through the main flow
-                    agentToExecute.process(stepMessage, conversation)
-                        .catch { e ->
-                            executedStepRecord.status = StepStatus.FAILED
-                            executedStepRecord.error = "Agent ${agentToExecute.id} failed: ${e.message}"
-                            scope.send(LLMMessage.SystemMessage("Workflow Error (Step $currentStep): ${executedStepRecord.error}"))
-                            throw e
-                        }
-                        .collect { resultMessage ->
-                            scope.send(resultMessage)
-                        }
-
-                    executedStepRecord.status = StepStatus.COMPLETED
-                    scope.send(LLMMessage.SystemMessage("Step $currentStep completed successfully."))
-                    currentStep++ // Move to the next potential step
-
-                    if (directorResponse.waitForUserInput) {
-                        scope.send(LLMMessage.SystemMessage("Pausing execution. Waiting for user input."))
-                        break
-                    }
-                } catch (e: Exception) {
-                    break
-                }
-            } // End while loop
-
-            if (currentStep > maxSteps) {
-                scope.send(LLMMessage.SystemMessage("Reached maximum step limit ($maxSteps). Stopping execution."))
+            } catch (e: Exception) {
+                emitAndStore(LLMMessage.SystemMessage("Error calling Director agent: ${e.message}"))
+                directorFailed = true
             }
+
+            if (directorFailed || directorResponse == null) {
+                emitAndStore(LLMMessage.SystemMessage("Halting execution due to director failure."))
+                break
+            }
+
+            emitAndStore(LLMMessage.SystemMessage("Director decision: ${directorResponse.overallReason ?: "(No reason provided)"}"))
+
+            if (directorResponse.isComplete) {
+                emitAndStore(LLMMessage.SystemMessage("Director indicates task is complete."))
+                break
+            }
+
+            val nextStepInfo = directorResponse.nextStep
+            if (nextStepInfo == null) {
+                emitAndStore(LLMMessage.SystemMessage("Director indicates task is not complete, but provided no next step. Halting."))
+                break
+            }
+
+            // 3. Execute the Step
+            val agentToExecute = orchestrator.getAgent(nextStepInfo.agentId)
+            if (agentToExecute == null) {
+                scope.send(LLMMessage.SystemMessage("Error: Agent '${nextStepInfo.agentId}' for step $currentStep not found. Halting."))
+                conversation.executedSteps.add(
+                    ExecutedStep(
+                        agentId = nextStepInfo.agentId,
+                        action = nextStepInfo.action,
+                        status = StepStatus.FAILED,
+                        error = "Agent not found"
+                    )
+                )
+                break
+            }
+
+            val executedStepRecord = ExecutedStep(
+                agentId = agentToExecute.id,
+                action = nextStepInfo.action,
+                status = StepStatus.RUNNING
+            )
+            conversation.executedSteps.add(executedStepRecord)
+
+            emitAndStore(LLMMessage.SystemMessage("Executing Step $currentStep: Agent '${agentToExecute.id}', Action: '${nextStepInfo.action}'"))
+
+            try {
+                // Prepare input for the agent, including original request and specific action
+                val stepInputContent = buildString {
+                    append("Original Request: ${conversation.originalUserRequest}\n")
+                    // Maybe include summary of previous steps if needed?
+                    // append("Previous Steps Summary: ...\n")
+                    append("Your Current Task: ${nextStepInfo.action}")
+                }
+                val stepMessage = triggerMessage.copy(
+                    content = stepInputContent,
+                    recipient = agentToExecute.id
+                )
+
+                // Execute and collect results, sending them through the main flow
+                agentToExecute.process(stepMessage, conversation)
+                    .catch { e ->
+                        executedStepRecord.status = StepStatus.FAILED
+                        executedStepRecord.error = "Agent ${agentToExecute.id} failed: ${e.message}"
+                        emitAndStore(LLMMessage.SystemMessage("Workflow Error (Step $currentStep): ${executedStepRecord.error}"))
+                        throw e
+                    }
+                    .collect { resultMessage ->
+                        emitAndStore(resultMessage)
+                    }
+
+                executedStepRecord.status = StepStatus.COMPLETED
+                emitAndStore(LLMMessage.SystemMessage("Step $currentStep completed successfully."))
+                currentStep++ // Move to the next potential step
+
+                if (directorResponse.waitForUserInput) {
+                    emitAndStore(LLMMessage.SystemMessage("Pausing execution. Waiting for user input."))
+                    break
+                }
+            } catch (e: Exception) {
+                break
+            }
+        } // End while loop
+
+        if (currentStep > maxSteps) {
+            emitAndStore(LLMMessage.SystemMessage("Reached maximum step limit ($maxSteps). Stopping execution."))
         }
     }
 
