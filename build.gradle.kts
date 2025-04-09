@@ -4,31 +4,10 @@ plugins {
     `maven-publish`
 }
 
-
-fun getBranchName(): String {
-    val branchNameEnv = System.getenv("BRANCH_NAME")
-    if (!branchNameEnv.isNullOrEmpty()) {
-        return branchNameEnv
-    }
-
-    return try {
-        val process = ProcessBuilder("git", "rev-parse", "--abbrev-ref", "HEAD")
-            .redirectErrorStream(true)
-            .start()
-
-        process.inputStream.bufferedReader().use { it.readText() }.trim()
-            .also { process.waitFor() }
-            .replace("/", "-")
-    } catch (e: Exception) {
-        "unknown"
-    }
-}
-val branch = getBranchName()
-
 val libVersion: String by project
 
 group = "dev.gabrielolv"
-version = if (branch == "main") libVersion else "${libVersion}-SNAPSHOT"
+version =  libVersion
 
 repositories {
     mavenCentral()
@@ -92,7 +71,6 @@ publishing {
 
             // --- POM Metadata (Customize this!) ---
             pom {
-                properties.set(mapOf("branchName" to getBranchName()))
                 name.set("KAIA")
                 description.set("A concise description of your library.")
                 url.set("https://github.com/GabrielOlvH/kaia")
