@@ -16,4 +16,4 @@ jobs:
           # Call Nexus REST API to delete artifacts for this branch
           curl -u ${{ secrets.NEXUS_USERNAME }}:${{ secrets.NEXUS_PASSWORD }} \
                -X DELETE \
-               "https://your-nexus-repo/service/rest/v1/search/assets?repository=your-repo&maven.artifactId=your-artifact&maven.version=*-${BRANCH_NAME}-*"
+               "https://maven.gabrielolv.dev/service/rest/v1/search/assets?repository=your-repo&maven.artifactId=your-artifact&maven.version=*-${BRANCH_NAME}-*"
