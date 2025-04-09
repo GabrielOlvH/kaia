@@ -52,7 +52,7 @@ dependencies {
     implementation(libs.exposed.dao)
     implementation(libs.exposed.jdbc)
     implementation(libs.exposed.datetime)
-    implementation("com.github.jsqlparser:jsqlparser:4.9")
+    implementation("com.github.jsqlparser:jsqlparser:5.1")
     implementation("com.h2database:h2:2.3.232")
 
     // Test dependencies
