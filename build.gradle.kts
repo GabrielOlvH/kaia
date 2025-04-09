@@ -96,16 +96,23 @@ publishing {
         }
     }
     repositories {
-        // Configure the repository to publish to (GitHub Packages)
+        // Configure Sonatype Nexus repository
         maven {
-            name = "GitHubPackages"
-            // IMPORTANT: Replace YOUR_REPO_NAME with your actual GitHub repository name
-            url = uri("https://maven.pkg.github.com/gabrielolvh/kaia")
+            name = "SonatypeNexus"
+            
+            // Dynamically determine repository URL based on version (SNAPSHOT vs Release)
+            url = uri(
+                if (version.toString().endsWith("SNAPSHOT")) {
+                    "https://nexus3-production-b3d5.up.railway.app/repository/maven-snapshots/"
+                } else {
+                    "https://nexus3-production-b3d5.up.railway.app/repository/maven-releases/"
+                }
+            )
+            
             credentials {
-                // Read credentials from environment variables (provided by GitHub Actions)
-                // Fallback to project properties for potential local testing (gpr.user, gpr.key)
-                username = System.getenv("GITHUB_ACTOR") ?: project.findProperty("gpr.user") as String?
-                password = System.getenv("GITHUB_TOKEN") ?: project.findProperty("gpr.key") as String?
+                // Use environment variables or gradle.properties for credentials
+                username = System.getenv("NEXUS_USERNAME") ?: project.findProperty("nexus.username") as String?
+                password = System.getenv("NEXUS_PASSWORD") ?: project.findProperty("nexus.password") as String?
             }
         }
     }

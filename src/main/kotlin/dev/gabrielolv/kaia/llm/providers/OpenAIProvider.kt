@@ -83,10 +83,10 @@ internal class OpenAIProvider(
         val choices: List<OpenAIChoice>
     )
 
-    private fun LLMMessage.toOpenAIMessage(): OpenAIMessage = when (this) {
+    private fun LLMMessage.toOpenAIMessage(): OpenAIMessage? = when (this) {
         is LLMMessage.UserMessage -> OpenAIMessage("user", content = content)
         is LLMMessage.AssistantMessage -> OpenAIMessage("assistant", content = content)
-        is LLMMessage.SystemMessage -> OpenAIMessage("system", content = content)
+        is LLMMessage.SystemMessage -> null
         is LLMMessage.ToolCallMessage -> {
             OpenAIMessage(
                 role = "assistant",
@@ -113,28 +113,12 @@ internal class OpenAIProvider(
         options: LLMOptions
     ): Flow<LLMMessage> = flow {
         // Prepare messages for the API call, applying history limits
-        val apiMessages = mutableListOf<OpenAIMessage>()
-        var systemMessage: OpenAIMessage? = null
+        val apiMessages = mutableListOf(OpenAIMessage("system", options.systemPrompt))
 
-        // Extract system message first if it exists in the history
-        // Or use the one from options if provided (options override history)
-        val systemPromptFromOptions = options.systemPrompt?.let { OpenAIMessage("system", it) }
-        val systemPromptFromHistory = messages.filterIsInstance<LLMMessage.SystemMessage>().lastOrNull()?.toOpenAIMessage()
-
-        systemMessage = systemPromptFromOptions ?: systemPromptFromHistory
-
-        systemMessage?.let { apiMessages.add(it) }
-
-        // Get the relevant conversation history (excluding system messages already handled)
-        val conversationMessages = messages.filter { it !is LLMMessage.SystemMessage }
-
-        // Apply history size limit
-        val trimmedConversation = options.historySize?.let { size ->
-            conversationMessages.takeLast(size)
-        } ?: conversationMessages
+        val conversationMessages = messages
 
         // Convert and add conversation messages
-        trimmedConversation.mapNotNull { it.toOpenAIMessage() }.forEach { apiMessages.add(it) }
+        conversationMessages.mapNotNull { it.toOpenAIMessage() }.forEach { apiMessages.add(it) }
 
         // Ensure there's at least one non-system message if the original list had them
         if (apiMessages.none { it.role != "system" } && conversationMessages.isNotEmpty()) {

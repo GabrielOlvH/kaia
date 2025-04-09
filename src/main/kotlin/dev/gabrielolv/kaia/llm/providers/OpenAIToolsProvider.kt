@@ -103,10 +103,10 @@ class OpenAIToolsProvider(
         val choices: List<Choice>
     )
 
-    private fun LLMMessage.toOpenAIToolMessage(): Message = when (this) {
+    private fun LLMMessage.toOpenAIToolMessage(): Message? = when (this) {
         is LLMMessage.UserMessage -> Message("user", content = content)
         is LLMMessage.AssistantMessage -> Message("assistant", content = content)
-        is LLMMessage.SystemMessage -> Message("system", content = content)
+        is LLMMessage.SystemMessage -> null
         is LLMMessage.ToolCallMessage -> {
             Message(
                 role = "assistant",
@@ -184,28 +184,17 @@ class OpenAIToolsProvider(
         options: LLMOptions
     ): Flow<LLMMessage> = channelFlow {
         // Prepare initial messages for the API call, applying history limits
-        val initialApiMessages = mutableListOf<Message>()
-        var systemMessage: Message? = null
-
-        // Extract system message (options override history)
-        val systemPromptFromOptions = options.systemPrompt?.let { Message("system", it) }
-        val systemPromptFromHistory = messages.filterIsInstance<LLMMessage.SystemMessage>().lastOrNull()?.toOpenAIToolMessage()
-        systemMessage = systemPromptFromOptions ?: systemPromptFromHistory
-        systemMessage?.let { initialApiMessages.add(it) }
+        val apiMessages = mutableListOf(Message("system", options.systemPrompt))
 
         // Get conversation history (excluding system messages)
-        val conversationMessages = messages.filter { it !is LLMMessage.SystemMessage }
+        val conversationMessages = messages
 
-        // Apply history size limit
-        val trimmedConversation = options.historySize?.let { size ->
-            conversationMessages.takeLast(size)
-        } ?: conversationMessages
 
         // Convert and add conversation messages
-        trimmedConversation.map { it.toOpenAIToolMessage() }.forEach { initialApiMessages.add(it) }
+        conversationMessages.mapNotNull { it.toOpenAIToolMessage() }.forEach { apiMessages.add(it) }
 
         // Ensure there's content if needed
-        if (initialApiMessages.none { it.role != "system" }) {
+        if (apiMessages.none { it.role != "system" }) {
             send(LLMMessage.SystemMessage("Error: No valid messages found to send to LLM after filtering."))
             close() // Close the channelFlow
             return@channelFlow
@@ -223,7 +212,7 @@ class OpenAIToolsProvider(
         }
 
         // --- Tool call loop ---
-        var currentApiMessages = initialApiMessages.toList() // Start with the history
+        var currentApiMessages = apiMessages.toList() // Start with the history
         val maxIterations = 10
         var iteration = 0
 

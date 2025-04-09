@@ -1,5 +1,6 @@
 package dev.gabrielolv.kaia.core.agents
 
+import dev.gabrielolv.kaia.llm.LLMMessage
 import dev.gabrielolv.kaia.llm.LLMOptions
 import dev.gabrielolv.kaia.llm.LLMProvider
 
@@ -9,7 +10,7 @@ import dev.gabrielolv.kaia.llm.LLMProvider
 fun Agent.Companion.llm(
     provider: LLMProvider,
     systemPrompt: String? = null,
-    historySize: Int? = 10, // Allow configuring history size per agent
+    // Allow configuring history size per agent
     block: AgentBuilder.() -> Unit
 ): Agent {
     val builder = AgentBuilder().apply(block)
@@ -18,11 +19,16 @@ fun Agent.Companion.llm(
 
         val options = LLMOptions(
             systemPrompt = systemPrompt,
-            temperature = 0.7,
-            historySize = historySize
+            temperature = 0.7
         )
 
-        val history = conversation.messages.toList()
+        // Get the conversation history
+        val history = conversation.messages.toMutableList()
+
+        if (history.isNotEmpty() && history.last() !is LLMMessage.UserMessage) {
+            // Add a temporary user message to ensure the LLM responds
+            history.add(LLMMessage.UserMessage(content = "[Please continue]"))
+        }
 
         return@processor provider.generate(history, options)
     }
