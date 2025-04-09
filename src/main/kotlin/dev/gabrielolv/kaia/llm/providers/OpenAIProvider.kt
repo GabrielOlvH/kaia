@@ -83,10 +83,10 @@ internal class OpenAIProvider(
         val choices: List<OpenAIChoice>
     )
 
-    private fun LLMMessage.toOpenAIMessage(): OpenAIMessage = when (this) {
+    private fun LLMMessage.toOpenAIMessage(): OpenAIMessage? = when (this) {
         is LLMMessage.UserMessage -> OpenAIMessage("user", content = content)
         is LLMMessage.AssistantMessage -> OpenAIMessage("assistant", content = content)
-        is LLMMessage.SystemMessage -> OpenAIMessage("assistant", content = content)
+        is LLMMessage.SystemMessage -> null
         is LLMMessage.ToolCallMessage -> {
             OpenAIMessage(
                 role = "assistant",
@@ -118,7 +118,7 @@ internal class OpenAIProvider(
         val conversationMessages = messages
 
         // Convert and add conversation messages
-        conversationMessages.map { it.toOpenAIMessage() }.forEach { apiMessages.add(it) }
+        conversationMessages.mapNotNull { it.toOpenAIMessage() }.forEach { apiMessages.add(it) }
 
         // Ensure there's at least one non-system message if the original list had them
         if (apiMessages.none { it.role != "system" } && conversationMessages.isNotEmpty()) {

@@ -19,15 +19,18 @@ fun Agent.Companion.withDirectorAgent(
 
     val directorPrompt = """
     You are a sophisticated AI orchestrator acting as a step-by-step director.
-    Your task is to analyze the user's original request and the conversation history to determine the single best *next* action, or if the request is complete, OR if you need clarification from the user.
+    Your task is to analyze the user's original request and the executed steps to determine the single best *next* action, or if the request is complete, OR if you need clarification from the user.
 
     Available specialized agents:
     $agentCatalog
     Default Agent ID for general tasks: ${fallbackAgent.id}
 
     Original User Request: {{original_request}}
+    
+    Previously Executed Steps:
+    {{executed_steps}}
 
-    Based on the original request and the history:
+    Based on the original request and the executed steps:
     1. Evaluate if the original request is fully addressed. If yes, set "isComplete": true.
     2. Evaluate if you have enough information to proceed with the *next logical step*.
        - If yes, determine the single best agent and action for that step. Set "isComplete": false, "waitForUserInput": false.
@@ -89,8 +92,27 @@ fun Agent.Companion.withDirectorAgent(
         flow {
             val originalRequest = conversation.originalUserRequest
 
+            val formattedExecutedSteps = if (conversation.executedSteps.isEmpty()) {
+                "No steps executed yet."
+            } else {
+                conversation.executedSteps.mapIndexed { index, step ->
+                    val stepHeader = "Step ${index+1}: Agent: ${step.agentId}, Action: '${step.action}', Status: ${step.status}" +
+                    (step.error?.let { ", Error: $it" } ?: "")
+                    
+                    val messageContent = if (step.messages.isNotEmpty()) {
+                        "\nAgent ${step.agentId} messages in this step:\n" + step.messages.filterIsInstance<LLMMessage.SystemMessage>()
+                            .joinToString("\n") { message -> message.content }
+                    } else {
+                        "\nNo messages recorded for this step."
+                    }
+                    
+                    "$stepHeader$messageContent\n"
+                }.joinToString("\n")
+            }
+
             val filledPrompt = directorPrompt
                 .replace("{{original_request}}", originalRequest)
+                .replace("{{executed_steps}}", formattedExecutedSteps)
 
             val planningOptions = LLMOptions(
                 systemPrompt = filledPrompt,
@@ -98,17 +120,17 @@ fun Agent.Companion.withDirectorAgent(
                 temperature = 0.1
             )
 
-            conversation.messages.add(LLMMessage.UserMessage("Determine next step."))
-
+            val tempMessage = LLMMessage.UserMessage("Determine next step based on executed steps.")
+            val tempMessages = conversation.messages.toMutableList().apply { add(tempMessage) }
 
             try {
                 val directorResponseText = provider
-                    .generate(conversation.messages, planningOptions)
+                    .generate(tempMessages, planningOptions)
                     .mapNotNull { it as? LLMMessage.AssistantMessage }
                     .lastOrNull()?.content
 
                 if (directorResponseText != null) {
-                    emit(LLMMessage.AssistantMessage(content = directorResponseText,))
+                    emit(LLMMessage.AssistantMessage(content = directorResponseText))
                 } else {
                     emit(LLMMessage.SystemMessage(content = "Director agent failed to generate a response."))
                 }

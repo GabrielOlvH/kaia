@@ -103,10 +103,10 @@ class OpenAIToolsProvider(
         val choices: List<Choice>
     )
 
-    private fun LLMMessage.toOpenAIToolMessage(): Message = when (this) {
+    private fun LLMMessage.toOpenAIToolMessage(): Message? = when (this) {
         is LLMMessage.UserMessage -> Message("user", content = content)
         is LLMMessage.AssistantMessage -> Message("assistant", content = content)
-        is LLMMessage.SystemMessage -> Message("assistant", content = content)
+        is LLMMessage.SystemMessage -> null
         is LLMMessage.ToolCallMessage -> {
             Message(
                 role = "assistant",
@@ -191,7 +191,7 @@ class OpenAIToolsProvider(
 
 
         // Convert and add conversation messages
-        conversationMessages.map { it.toOpenAIToolMessage() }.forEach { apiMessages.add(it) }
+        conversationMessages.mapNotNull { it.toOpenAIToolMessage() }.forEach { apiMessages.add(it) }
 
         // Ensure there's content if needed
         if (apiMessages.none { it.role != "system" }) {

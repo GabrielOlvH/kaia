@@ -121,14 +121,15 @@ class HandoffManager(
                 )
                 conversation.messages.add(LLMMessage.UserMessage(directorTrigger.content))
 
-
                 directorAgent.process(directorTrigger, conversation)
                     .mapNotNull { msg ->
                         // Look for the specific assistant message marked as director response
                         if (msg is LLMMessage.AssistantMessage) {
                             lastAssistantMessageContent = msg.content
+                            conversation.append(msg) // Still store director responses in history
                         } else {
                             scope.send(msg)
+                            conversation.append(msg) // Store system messages from director in history
                             null
                         }
                     }
@@ -175,7 +176,9 @@ class HandoffManager(
             // 3. Execute the Step
             val agentToExecute = orchestrator.getAgent(nextStepInfo.agentId)
             if (agentToExecute == null) {
-                scope.send(LLMMessage.SystemMessage("Error: Agent '${nextStepInfo.agentId}' for step $currentStep not found. Halting."))
+                val errorMsg = LLMMessage.SystemMessage("Error: Agent '${nextStepInfo.agentId}' for step $currentStep not found. Halting.")
+                scope.send(errorMsg)
+                conversation.append(errorMsg)
                 conversation.executedSteps.add(
                     ExecutedStep(
                         agentId = nextStepInfo.agentId,
@@ -194,14 +197,13 @@ class HandoffManager(
             )
             conversation.executedSteps.add(executedStepRecord)
 
-            emitAndStore(LLMMessage.SystemMessage("Executing Step $currentStep: Agent '${agentToExecute.id}', Action: '${nextStepInfo.action}'"))
+            val stepStartMsg = LLMMessage.SystemMessage("Executing Step $currentStep: Agent '${agentToExecute.id}', Action: '${nextStepInfo.action}'")
+            scope.send(stepStartMsg)
+            conversation.append(stepStartMsg)
 
             try {
-                // Prepare input for the agent, including original request and specific action
                 val stepInputContent = buildString {
                     append("Original Request: ${conversation.originalUserRequest}\n")
-                    // Maybe include summary of previous steps if needed?
-                    // append("Previous Steps Summary: ...\n")
                     append("Your Current Task: ${nextStepInfo.action}")
                 }
                 val stepMessage = triggerMessage.copy(
@@ -209,24 +211,34 @@ class HandoffManager(
                     recipient = agentToExecute.id
                 )
 
-                // Execute and collect results, sending them through the main flow
+                // Add the user message to the step's messages
+                executedStepRecord.messages.add(LLMMessage.UserMessage(stepInputContent))
+
                 agentToExecute.process(stepMessage, conversation)
                     .catch { e ->
                         executedStepRecord.status = StepStatus.FAILED
                         executedStepRecord.error = "Agent ${agentToExecute.id} failed: ${e.message}"
-                        emitAndStore(LLMMessage.SystemMessage("Workflow Error (Step $currentStep): ${executedStepRecord.error}"))
+                        val errorMsg = LLMMessage.SystemMessage("Workflow Error (Step $currentStep): ${executedStepRecord.error}")
+                        scope.send(errorMsg)
+                        executedStepRecord.messages.add(errorMsg)
                         throw e
                     }
                     .collect { resultMessage ->
+                        if (resultMessage is LLMMessage.SystemMessage)
+                            executedStepRecord.messages.add(resultMessage)
                         emitAndStore(resultMessage)
                     }
 
                 executedStepRecord.status = StepStatus.COMPLETED
-                emitAndStore(LLMMessage.SystemMessage("Step $currentStep completed successfully."))
+                val completionMsg = LLMMessage.SystemMessage("Step $currentStep completed successfully.")
+                scope.send(completionMsg)
+                conversation.append(completionMsg)
                 currentStep++ // Move to the next potential step
 
                 if (directorResponse.waitForUserInput) {
-                    emitAndStore(LLMMessage.SystemMessage("Pausing execution. Waiting for user input."))
+                    val pauseMsg = LLMMessage.SystemMessage("Pausing execution. Waiting for user input.")
+                    scope.send(pauseMsg)
+                    conversation.append(pauseMsg)
                     break
                 }
             } catch (e: Exception) {
