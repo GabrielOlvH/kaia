@@ -64,7 +64,7 @@ dependencies {
     testImplementation("io.kotest:kotest-assertions-core:5.8.0")
     testImplementation("io.kotest:kotest-property:5.9.1")
 
-    testImplementation("io.ktor:ktor-client-mock:3.1.1")
+    testImplementation("io.ktor:ktor-client-mock:3.1.2")
 
     testImplementation("io.ktor:ktor-client-content-negotiation:3.1.1")
     testImplementation("io.ktor:ktor-serialization-kotlinx-json:3.1.1")
