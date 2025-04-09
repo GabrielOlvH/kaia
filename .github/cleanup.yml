@@ -1,0 +1,19 @@
+name: Delete Nexus Artifacts
+
+on:
+  delete:
+    branches:
+      - '*'  # Triggers when any branch is deleted
+
+jobs:
+  delete-artifacts:
+    runs-on: ubuntu-latest
+    if: github.event.ref_type == 'branch'
+    steps:
+      - name: Delete artifacts from Nexus
+        run: |
+          BRANCH_NAME="${{ github.event.ref }}"
+          # Call Nexus REST API to delete artifacts for this branch
+          curl -u ${{ secrets.NEXUS_USERNAME }}:${{ secrets.NEXUS_PASSWORD }} \
+               -X DELETE \
+               "https://your-nexus-repo/service/rest/v1/search/assets?repository=your-repo&maven.artifactId=your-artifact&maven.version=*-${BRANCH_NAME}-*"
