@@ -50,11 +50,8 @@ internal class CustomProvider(
         val conversationMessages = messages.filter { it !is LLMMessage.SystemMessage }
 
         // Apply history size limit
-        val trimmedConversation = options.historySize?.let { size ->
-            conversationMessages.takeLast(size)
-        } ?: conversationMessages
 
-        messagesToSend.addAll(trimmedConversation)
+        messagesToSend.addAll(conversationMessages)
         // --- End History Trimming Example ---
 
 
