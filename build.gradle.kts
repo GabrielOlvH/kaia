@@ -28,7 +28,7 @@ val branch = getBranchName()
 val libVersion: String by project
 
 group = "dev.gabrielolv"
-version = if (branch == "main") libVersion else "${libVersion}-SNAPSHOT"
+version = if (branch == "main") libVersion else "${libVersion}-${branch}"
 
 repositories {
     mavenCentral()
@@ -125,9 +125,9 @@ publishing {
             // Dynamically determine repository URL based on version (SNAPSHOT vs Release)
             url = uri(
                 if (version.toString().endsWith("SNAPSHOT")) {
-                    "https://nexus3-production-b3d5.up.railway.app/repository/maven-snapshots/"
+                    "https://maven.gabrielolv.dev/repository/maven-snapshots/"
                 } else {
-                    "https://nexus3-production-b3d5.up.railway.app/repository/maven-releases/"
+                    "https://maven.gabrielolv.dev/repository/maven-releases/"
                 }
             )
             
