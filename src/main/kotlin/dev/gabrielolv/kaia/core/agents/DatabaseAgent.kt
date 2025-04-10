@@ -3,131 +3,169 @@ package dev.gabrielolv.kaia.core.agents
 import dev.gabrielolv.kaia.llm.LLMMessage
 import dev.gabrielolv.kaia.llm.LLMOptions
 import dev.gabrielolv.kaia.llm.LLMProvider
+import dev.gabrielolv.kaia.utils.*
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
 import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNamingStrategy
-import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.Table
-import org.jetbrains.exposed.sql.transactions.transaction
 
-@Serializable
-private data class GeneratedSql(val sqlTemplate: String, val parameters: List<JsonPrimitive>)
 
 @OptIn(ExperimentalSerializationApi::class)
 private val json = Json {
     namingStrategy = JsonNamingStrategy.SnakeCase
 }
 
-private val ddlCache = mutableMapOf<String, String>()
-
-private fun getDdlForTables(tables: List<Table>): String {
-    return tables.joinToString("\n") { table ->
-        ddlCache.computeIfAbsent(table.tableName) {
-            val db = Database.connect("jdbc:h2:mem:test;DB_CLOSE_DELAY=-1;", driver = "org.h2.Driver")
-            transaction(db) {
-                table.ddl.joinToString("\n")
-            }
-        }
-    }
-}
-
-private fun runQuery(database: Database, generatedSql: GeneratedSql): LLMMessage {
-    val (rows, error) = transaction(database) {
-        try {
-            val stmt = connection.prepareStatement(generatedSql.sqlTemplate, false)
-            generatedSql.parameters.forEachIndexed { index, primitive ->
-                stmt[index + 1] = primitive.content
-            }
-
-            val resultSet = stmt.executeQuery()
-            val metaData = resultSet.metaData
-            val columnCount = metaData.columnCount
-            val columnNames =
-                (1..columnCount).map { metaData.getColumnLabel(it) }
-
-            val rows = mutableListOf<Map<String, Any?>>()
-            while (resultSet.next()) {
-                val row = mutableMapOf<String, Any?>()
-                for (i in 1..columnCount) {
-                    row[columnNames[i - 1]] = resultSet.getObject(i)
-                }
-                rows.add(row)
-            }
-            resultSet.close()
-            rows to null
-        } catch (e: Exception) {
-            null to e
-        }
-    }
-
-    error?.let {
-        return LLMMessage.SystemMessage("There was an error while executing the query: ${error.message}")
-    }
-
-    rows?.let {
-        val resultsAsString =
-            rows.joinToString("\n") { entry -> entry.entries.joinToString { "${it.key}=${it.value}" } }
-        return LLMMessage.SystemMessage("Query Results:\n$resultsAsString")
-    }
-
-    return LLMMessage.SystemMessage("Unreachable. If you see this, cry.")
-}
-
-
 fun Agent.Companion.withDatabaseAccess(
     provider: LLMProvider,
     database: Database,
     tables: List<Table>,
+    predefinedQueries: Map<Int, PreDefinedQuery> = emptyMap(),
+    mode: DatabaseAgentMode = DatabaseAgentMode.HYBRID,
     block: AgentBuilder.() -> Unit
 ): Agent {
     val builder = AgentBuilder().apply(block)
 
     val dialect = database.dialect.name
-    val prompt = """
-    You are an AI assistant that translates natural language questions into safe, parameterized SQL query components for a $dialect database.
     
-    **Instructions:**
-    1.  Analyze the user's question and the provided database schema.
-    2.  Determine the appropriate SQL query structure and the specific parameter values derived from the user's request.
-    3.  Generate a JSON object containing two keys:
-        *   `"sql_template"`: A string containing the SQL query template. Use standard JDBC placeholders (`?`) for all user-provided values or literals derived from the request. Do **NOT** embed these values directly in the SQL string.
-        *   `"parameters"`: A JSON array containing the values for the placeholders, in the exact order they appear in the `sql_template`. If no parameters are needed, provide an empty array `[]`.
-    4.  Ensure the generated SQL is valid for $dialect and uses only the allowed tables/columns from the schema.
-    5.  Prioritize efficiency (e.g., use indexed columns in WHERE clauses).
-    6.  Output **only** the raw JSON object, without any surrounding text or markdown formatting.
+    val predefinedQueriesText = if (predefinedQueries.isNotEmpty()) {
+        """
+        **Predefined Queries:**
+        ${predefinedQueries.entries.joinToString("\n") { (id, query) ->
+            """
+            Query #$id: ${query.description}
+            Parameters: ${if (query.parameterDescriptions.isEmpty()) "None" else query.parameterDescriptions.joinToString(", ")}
+            """.trimIndent()
+        }}
+        
+        **Instructions for Predefined Queries:**
+        If a predefined query matches the user's intent, respond with a JSON object containing:
+        - `"query_id"`: The number of the predefined query to use
+        - `"parameters"`: An array of parameter values in the exact order needed for the query
+        
+        Example: {"query_id": 1, "parameters": ["value1", "value2"]}
+        """
+    } else {
+        ""
+    }
+    
+    val customQueryInstructions = """
+        **Instructions for Custom SQL:**
+        Generate a JSON object containing:
+        - `"sql_template"`: A string containing the SQL query template. Use standard JDBC placeholders (`?`) for all user-provided values or literals derived from the request.
+        - `"parameters"`: A JSON array containing the values for the placeholders, in the exact order they appear in the `sql_template`.
+        
+        Example: {"sql_template": "SELECT * FROM users WHERE user_id = ?", "parameters": ["123"]}
+        """
+    
+    val modeSpecificInstructions = when (mode) {
+        DatabaseAgentMode.FREE -> {
+            customQueryInstructions
+        }
+        DatabaseAgentMode.PREDEFINED_ONLY -> {
+            if (predefinedQueries.isEmpty()) {
+                throw IllegalArgumentException("PREDEFINED_ONLY mode requires at least one predefined query")
+            }
+            predefinedQueriesText
+        }
+        DatabaseAgentMode.HYBRID -> {
+            if (predefinedQueries.isEmpty()) {
+                customQueryInstructions
+            } else {
+                """
+                $predefinedQueriesText
+                
+                $customQueryInstructions
+                
+                You can either:
+                1. Use a predefined query if it matches the user's intent exactly, or
+                2. Generate a custom SQL query, using the predefined queries as examples/reference
+                """
+            }
+        }
+    }
+    
+    val prompt = """
+    You are an AI assistant that translates natural language questions into database queries for a $dialect database.
     
     **Database Schema:**
     ```sql
-        ${getDdlForTables(tables)}
+    ${getDdlForTables(tables)}
     ```
+    
+    $modeSpecificInstructions
+    
+    Output **only** the raw JSON object, without any surrounding text or markdown formatting.
     """
+    
     builder.processor = processor@{ _, conversation ->
         flow {
             val options = LLMOptions(
                 responseFormat = "json_object",
                 systemPrompt = prompt,
-                temperature = 0.7
+                temperature = 0.1
             )
             val response = provider.generate(conversation.messages, options).toList().last { it is LLMMessage.AssistantMessage }
-            val generatedSql = json.decodeFromString<GeneratedSql>((response as LLMMessage.AssistantMessage).content)
+            val responseContent = (response as LLMMessage.AssistantMessage).content
+            
+            try {
+                when (mode) {
+                    DatabaseAgentMode.FREE -> {
+                        // Always parse as custom SQL
+                        val generatedSql = json.decodeFromString<GeneratedSql>(responseContent)
+                        emit(LLMMessage.SystemMessage("Query Template: ${generatedSql.sqlTemplate}\nQuery Parameters: ${generatedSql.parameters}"))
+                        emit(execute(database, generatedSql))
+                    }
+                    DatabaseAgentMode.PREDEFINED_ONLY -> {
+                        // Only try to parse as predefined query
+                        val selection = json.decodeFromString<PreDefinedQuerySelection>(responseContent)
+                        val predefinedQuery = predefinedQueries[selection.queryId]
+                        
+                        if (predefinedQuery != null) {
+                            emit(LLMMessage.SystemMessage("Using predefined query #${selection.queryId}: ${predefinedQuery.description}"))
+                            val generatedSql = GeneratedSql(
+                                sqlTemplate = predefinedQuery.sqlTemplate,
+                                parameters = selection.parameters
+                            )
+                            emit(execute(database, generatedSql))
+                        } else {
+                            emit(LLMMessage.SystemMessage("Error: Predefined query #${selection.queryId} does not exist"))
+                        }
+                    }
+                    DatabaseAgentMode.HYBRID -> {
+                        // Try predefined query first, fallback to custom SQL
+                        if (responseContent.contains("query_id") && predefinedQueries.isNotEmpty()) {
+                            try {
+                                val selection = json.decodeFromString<PreDefinedQuerySelection>(responseContent)
+                                val predefinedQuery = predefinedQueries[selection.queryId]
+                                
+                                if (predefinedQuery != null) {
+                                    emit(LLMMessage.SystemMessage("Using predefined query #${selection.queryId}: ${predefinedQuery.description}"))
+                                    val generatedSql = GeneratedSql(
+                                        sqlTemplate = predefinedQuery.sqlTemplate,
+                                        parameters = selection.parameters
+                                    )
+                                    emit(execute(database, generatedSql))
+                                    return@flow
+                                } else {
+                                    emit(LLMMessage.SystemMessage("Error: Predefined query #${selection.queryId} does not exist. Falling back to custom SQL generation."))
+                                }
+                            } catch (e: Exception) {
+                                // Failed to parse as predefined query, continue to try custom SQL
+                            }
+                        }
 
-            emit(LLMMessage.SystemMessage("Query Template: ${generatedSql.sqlTemplate}\nQuery Parameters: ${generatedSql.parameters}"))
-
-//            val validation = validateAndAnalyzeSelectQuery(generatedSql.sqlTemplate, database, tables.map { it.tableName }.toSet())
-//
-//            if (!validation) {
-//                emit(LLMMessage.SystemMessage("Generated query is not allowed!"))
-//                throw SQLException("Validation failed")
-//            }
-
-
-            emit(runQuery(database, generatedSql))
+                        val generatedSql = json.decodeFromString<GeneratedSql>(responseContent)
+                        emit(LLMMessage.SystemMessage("Query Template: ${generatedSql.sqlTemplate}\nQuery Parameters: ${generatedSql.parameters}"))
+                        emit(execute(database, generatedSql))
+                    }
+                }
+            } catch (e: Exception) {
+                emit(LLMMessage.SystemMessage("Error parsing response: ${e.message}\nResponse: $responseContent"))
+            }
         }
-
     }
 
     return builder.build()
