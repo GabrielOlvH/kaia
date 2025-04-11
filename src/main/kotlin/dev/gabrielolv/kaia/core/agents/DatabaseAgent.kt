@@ -37,15 +37,35 @@ fun Agent.Companion.withDatabaseAccess(
             """
             Query #$id: ${query.description}
             Parameters: ${if (query.parameterDescriptions.isEmpty()) "None" else query.parameterDescriptions.joinToString(", ")}
-            """.trimIndent()
+            
+            Response format:
+            {
+              "query_id": $id,
+              "parameters": [
+                {"value": "your_value", "type": "TYPE"},
+                ...
+              ]
+            }
+            
+            Valid parameter types: STRING, INTEGER, DECIMAL, BOOLEAN, DATE, TIMESTAMP
+            """
+            .trimIndent()
         }}
         
         **Instructions for Predefined Queries:**
         If a predefined query matches the user's intent, respond with a JSON object containing:
         - `"query_id"`: The number of the predefined query to use
-        - `"parameters"`: An array of parameter values in the exact order needed for the query
+        - `"parameters"`: An array of parameter objects, each containing:
+          - `"value"`: The parameter value as a string
+          - `"type"`: One of: "STRING", "INTEGER", "DECIMAL", "BOOLEAN", "DATE", "TIMESTAMP"
         
-        Example: {"query_id": 1, "parameters": ["value1", "value2"]}
+        Example: {
+          "query_id": 1, 
+          "parameters": [
+            {"value": "John", "type": "STRING"},
+            {"value": "2024-01-01", "type": "DATE"}
+          ]
+        }
         """
     } else {
         ""
@@ -55,9 +75,17 @@ fun Agent.Companion.withDatabaseAccess(
         **Instructions for Custom SQL:**
         Generate a JSON object containing:
         - `"sql_template"`: A string containing the SQL query template. Use standard JDBC placeholders (`?`) for all user-provided values or literals derived from the request.
-        - `"parameters"`: A JSON array containing the values for the placeholders, in the exact order they appear in the `sql_template`.
+        - `"parameters"`: A JSON array of objects, each containing:
+          - `"value"`: The parameter value as a string
+          - `"type"`: One of: "STRING", "INTEGER", "DECIMAL", "BOOLEAN", "DATE", "TIMESTAMP"
         
-        Example: {"sql_template": "SELECT * FROM users WHERE user_id = ?", "parameters": ["123"]}
+        Example: {
+          "sql_template": "SELECT * FROM users WHERE age > ? AND join_date > ?",
+          "parameters": [
+            {"value": "18", "type": "INTEGER"},
+            {"value": "2024-01-01", "type": "DATE"}
+          ]
+        }
         """
     
     val modeSpecificInstructions = when (mode) {
@@ -113,13 +141,11 @@ fun Agent.Companion.withDatabaseAccess(
             try {
                 when (mode) {
                     DatabaseAgentMode.FREE -> {
-                        // Always parse as custom SQL
                         val generatedSql = json.decodeFromString<GeneratedSql>(responseContent)
                         emit(LLMMessage.SystemMessage("Query Template: ${generatedSql.sqlTemplate}\nQuery Parameters: ${generatedSql.parameters}"))
                         emit(execute(database, generatedSql))
                     }
                     DatabaseAgentMode.PREDEFINED_ONLY -> {
-                        // Only try to parse as predefined query
                         val selection = json.decodeFromString<PreDefinedQuerySelection>(responseContent)
                         val predefinedQuery = predefinedQueries[selection.queryId]
                         
@@ -135,12 +161,11 @@ fun Agent.Companion.withDatabaseAccess(
                         }
                     }
                     DatabaseAgentMode.HYBRID -> {
-                        // Try predefined query first, fallback to custom SQL
                         if (responseContent.contains("query_id") && predefinedQueries.isNotEmpty()) {
                             try {
                                 val selection = json.decodeFromString<PreDefinedQuerySelection>(responseContent)
                                 val predefinedQuery = predefinedQueries[selection.queryId]
-                                
+
                                 if (predefinedQuery != null) {
                                     emit(LLMMessage.SystemMessage("Using predefined query #${selection.queryId}: ${predefinedQuery.description}"))
                                     val generatedSql = GeneratedSql(

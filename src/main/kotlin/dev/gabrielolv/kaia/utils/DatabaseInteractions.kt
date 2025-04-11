@@ -5,6 +5,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.Table
+import org.jetbrains.exposed.sql.VarCharColumnType
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.sql.ResultSet
 
@@ -21,12 +22,28 @@ enum class DatabaseAgentMode {
 }
 
 /**
- * Represents a SQL query with parameterized values.
+ * Represents supported SQL parameter types.
+ */
+enum class SqlParameterType {
+    STRING, INTEGER, DECIMAL, BOOLEAN, DATE, TIMESTAMP
+}
+
+/**
+ * Represents a SQL parameter with its value and type.
+ */
+@Serializable
+data class SqlParameter(
+    val value: JsonPrimitive,
+    val type: SqlParameterType
+)
+
+/**
+ * Represents a SQL query with parameterized values and their types.
  */
 @Serializable
 data class GeneratedSql(
     val sqlTemplate: String,
-    val parameters: List<JsonPrimitive> = emptyList()
+    val parameters: List<SqlParameter> = emptyList()
 )
 
 /**
@@ -35,7 +52,7 @@ data class GeneratedSql(
 @Serializable
 data class PreDefinedQuerySelection(
     val queryId: Int,
-    val parameters: List<JsonPrimitive> = emptyList()
+    val parameters: List<SqlParameter> = emptyList()
 )
 
 /**
@@ -67,15 +84,38 @@ fun getDdlForTables(tables: List<Table>): String {
 }
 
 /**
+ * Converts a parameter value to the specified SQL type.
+ */
+private fun convertParameter(param: SqlParameter): Any? {
+    if (param.value.isString && param.value.content.equals("null", ignoreCase = true)) {
+        return null
+    }
+    
+    return when (param.type) {
+        SqlParameterType.STRING -> param.value.content
+        SqlParameterType.INTEGER -> param.value.content.toInt()
+        SqlParameterType.DECIMAL -> param.value.content.toBigDecimal()
+        SqlParameterType.BOOLEAN -> param.value.content.toBoolean()
+        SqlParameterType.DATE -> java.sql.Date.valueOf(param.value.content)
+        SqlParameterType.TIMESTAMP -> java.sql.Timestamp.valueOf(param.value.content)
+    }
+}
+
+/**
  * Executes a SQL query on the given database and returns the results as an LLM message.
  */
 fun execute(database: Database, generatedSql: GeneratedSql): LLMMessage {
     val (rows, error) = transaction(database) {
         try {
             val stmt = connection.prepareStatement(generatedSql.sqlTemplate, false)
-            // Set parameters in prepared statement
-            generatedSql.parameters.forEachIndexed { index, primitive ->
-                stmt[index + 1] = primitive.content
+            // Set parameters in prepared statement with type conversion
+            generatedSql.parameters.forEachIndexed { index, param ->
+                val convertedValue = convertParameter(param)
+                if (convertedValue == null) {
+                    stmt.setNull(index + 1, VarCharColumnType())
+                } else {
+                    stmt[index + 1] = convertedValue
+                }
             }
 
             // Execute and process results
