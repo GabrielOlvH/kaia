@@ -286,4 +286,3 @@ fun buildPrompt(builder: DatabaseAgentBuilder): String {
     Output **only** the raw JSON object, without any surrounding text or markdown formatting.
     """.trimIndent()
 }
-`
