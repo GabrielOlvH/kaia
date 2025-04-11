@@ -14,13 +14,13 @@ import java.sql.ResultSet
 /**
  * Defines the operating mode for database agents.
  */
-enum class DatabaseAgentMode {
+enum class QueryGenerationRule {
     /** Agent can generate any SQL query */
-    FREE,
+    UNRESTRICTED,
     /** Agent can only use predefined queries */
-    PREDEFINED_ONLY,
+    STRICT,
     /** Agent can use predefined queries or generate custom queries */
-    HYBRID
+    LOOSE
 }
 
 /**
@@ -106,7 +106,7 @@ private fun convertParameter(param: SqlParameter): Any? {
 /**
  * Executes a SQL query on the given database and returns the results as an LLM message.
  */
-suspend fun execute(database: Database, generatedSql: GeneratedSql, listeners: List<DatabaseQueryListener>): LLMMessage {
+suspend fun execute(database: Database, generatedSql: GeneratedSql, listener: DatabaseQueryListener?): LLMMessage {
     val (rows, error) = transaction(database) {
         try {
             val stmt = connection.prepareStatement(generatedSql.sqlTemplate, false)
@@ -130,9 +130,7 @@ suspend fun execute(database: Database, generatedSql: GeneratedSql, listeners: L
         }
     }
 
-    listeners.forEach { listener -> 
-        listener(generatedSql.sqlTemplate, generatedSql.parameters, rows, error)
-    }
+    listener?.invoke(generatedSql.sqlTemplate, generatedSql.parameters, rows, error)
 
     return when {
         error != null -> LLMMessage.SystemMessage("There was an error while executing the query: ${error.message}")
@@ -185,7 +183,7 @@ private fun formatResults(rows: List<Map<String, Any?>>): String {
 fun buildPrompt(builder: DatabaseAgentBuilder): String {
     val database = builder.database!!
     val predefinedQueries = builder.predefinedQueries
-    val mode = builder.mode
+    val mode = builder.queryGenerationRule
     val tables = builder.tables
 
     val dialect = database.dialect.name
@@ -249,16 +247,16 @@ fun buildPrompt(builder: DatabaseAgentBuilder): String {
         """
 
     val modeSpecificInstructions = when (mode) {
-        DatabaseAgentMode.FREE -> {
+        QueryGenerationRule.UNRESTRICTED -> {
             customQueryInstructions
         }
-        DatabaseAgentMode.PREDEFINED_ONLY -> {
+        QueryGenerationRule.STRICT -> {
             if (predefinedQueries.isEmpty()) {
                 throw IllegalArgumentException("PREDEFINED_ONLY mode requires at least one predefined query")
             }
             predefinedQueriesText
         }
-        DatabaseAgentMode.HYBRID -> {
+        QueryGenerationRule.LOOSE -> {
             if (predefinedQueries.isEmpty()) {
                 customQueryInstructions
             } else {
@@ -288,3 +286,4 @@ fun buildPrompt(builder: DatabaseAgentBuilder): String {
     Output **only** the raw JSON object, without any surrounding text or markdown formatting.
     """.trimIndent()
 }
+`

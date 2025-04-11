@@ -27,8 +27,8 @@ class DatabaseAgentBuilder : AgentBuilder() {
     var database: Database? = null
     var tables: List<Table> = emptyList()
     var predefinedQueries: Map<Int, PreDefinedQuery> = emptyMap()
-    var mode: DatabaseAgentMode = DatabaseAgentMode.HYBRID
-    var listeners: List<DatabaseQueryListener> = emptyList()
+    var queryGenerationRule: QueryGenerationRule = QueryGenerationRule.LOOSE
+    var listener: DatabaseQueryListener? = null
 }
 
 fun DatabaseAgentBuilder.buildProcessor(): (Message, Conversation) -> Flow<LLMMessage> {
@@ -51,13 +51,13 @@ fun DatabaseAgentBuilder.buildProcessor(): (Message, Conversation) -> Flow<LLMMe
             val responseContent = (response as LLMMessage.AssistantMessage).content
 
             try {
-                when (mode) {
-                    DatabaseAgentMode.FREE -> {
+                when (queryGenerationRule) {
+                    QueryGenerationRule.UNRESTRICTED -> {
                         val generatedSql = json.decodeFromString<GeneratedSql>(responseContent)
                         emit(LLMMessage.SystemMessage("Query Template: ${generatedSql.sqlTemplate}\nQuery Parameters: ${generatedSql.parameters}"))
-                        emit(execute(database, generatedSql, listeners))
+                        emit(execute(database, generatedSql, listener))
                     }
-                    DatabaseAgentMode.PREDEFINED_ONLY -> {
+                    QueryGenerationRule.STRICT -> {
                         val selection = json.decodeFromString<PreDefinedQuerySelection>(responseContent)
                         val predefinedQuery = predefinedQueries[selection.queryId]
 
@@ -67,12 +67,12 @@ fun DatabaseAgentBuilder.buildProcessor(): (Message, Conversation) -> Flow<LLMMe
                                 sqlTemplate = predefinedQuery.sqlTemplate,
                                 parameters = selection.parameters
                             )
-                            emit(execute(database, generatedSql, listeners))
+                            emit(execute(database, generatedSql, listener))
                         } else {
                             emit(LLMMessage.SystemMessage("Error: Predefined query #${selection.queryId} does not exist"))
                         }
                     }
-                    DatabaseAgentMode.HYBRID -> {
+                    QueryGenerationRule.LOOSE -> {
                         if (responseContent.contains("query_id") && predefinedQueries.isNotEmpty()) {
                             try {
                                 val selection = json.decodeFromString<PreDefinedQuerySelection>(responseContent)
@@ -84,7 +84,7 @@ fun DatabaseAgentBuilder.buildProcessor(): (Message, Conversation) -> Flow<LLMMe
                                         sqlTemplate = predefinedQuery.sqlTemplate,
                                         parameters = selection.parameters
                                     )
-                                    emit(execute(database, generatedSql, listeners))
+                                    emit(execute(database, generatedSql, listener))
                                     return@flow
                                 } else {
                                     emit(LLMMessage.SystemMessage("Error: Predefined query #${selection.queryId} does not exist. Falling back to custom SQL generation."))
@@ -96,7 +96,7 @@ fun DatabaseAgentBuilder.buildProcessor(): (Message, Conversation) -> Flow<LLMMe
 
                         val generatedSql = json.decodeFromString<GeneratedSql>(responseContent)
                         emit(LLMMessage.SystemMessage("Query Template: ${generatedSql.sqlTemplate}\nQuery Parameters: ${generatedSql.parameters}"))
-                        emit(execute(database, generatedSql, listeners))
+                        emit(execute(database, generatedSql, listener))
                     }
                 }
             } catch (e: Exception) {
