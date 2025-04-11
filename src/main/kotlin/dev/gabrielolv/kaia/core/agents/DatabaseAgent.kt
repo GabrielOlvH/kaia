@@ -20,14 +20,7 @@ private val json = Json {
     namingStrategy = JsonNamingStrategy.SnakeCase
 }
 
-interface DatabaseQueryListener {
-    suspend fun onQueryExecuted(
-        sqlTemplate: String,
-        parameters: List<SqlParameter>,
-        results: List<Map<String, Any?>>?,
-        error: Exception?
-    )
-}
+typealias DatabaseQueryListener = suspend (sqlTemplate: String, parameters: List<SqlParameter>, results: List<Map<String, Any?>>?, error: Exception?) -> Unit
 
 class DatabaseAgentBuilder : AgentBuilder() {
     var provider: LLMProvider? = null

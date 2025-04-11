@@ -130,7 +130,9 @@ suspend fun execute(database: Database, generatedSql: GeneratedSql, listeners: L
         }
     }
 
-    listeners.forEach { listener -> listener.onQueryExecuted(generatedSql.sqlTemplate, generatedSql.parameters, rows, error) }
+    listeners.forEach { listener -> 
+        listener(generatedSql.sqlTemplate, generatedSql.parameters, rows, error)
+    }
 
     return when {
         error != null -> LLMMessage.SystemMessage("There was an error while executing the query: ${error.message}")
