@@ -1,5 +1,7 @@
 package dev.gabrielolv.kaia.utils
 
+import dev.gabrielolv.kaia.core.agents.DatabaseAgentBuilder
+import dev.gabrielolv.kaia.core.agents.DatabaseQueryListener
 import dev.gabrielolv.kaia.llm.LLMMessage
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
@@ -104,7 +106,7 @@ private fun convertParameter(param: SqlParameter): Any? {
 /**
  * Executes a SQL query on the given database and returns the results as an LLM message.
  */
-fun execute(database: Database, generatedSql: GeneratedSql): LLMMessage {
+suspend fun execute(database: Database, generatedSql: GeneratedSql, listeners: List<DatabaseQueryListener>): LLMMessage {
     val (rows, error) = transaction(database) {
         try {
             val stmt = connection.prepareStatement(generatedSql.sqlTemplate, false)
@@ -127,6 +129,8 @@ fun execute(database: Database, generatedSql: GeneratedSql): LLMMessage {
             null to e
         }
     }
+
+    listeners.forEach { listener -> listener.onQueryExecuted(generatedSql.sqlTemplate, generatedSql.parameters, rows, error) }
 
     return when {
         error != null -> LLMMessage.SystemMessage("There was an error while executing the query: ${error.message}")
@@ -173,4 +177,112 @@ private fun formatResults(rows: List<Map<String, Any?>>): String {
             appendLine(headers.joinToString("|") { row[it]?.toString() ?: "null" })
         }
     }
+}
+
+
+fun buildPrompt(builder: DatabaseAgentBuilder): String {
+    val database = builder.database!!
+    val predefinedQueries = builder.predefinedQueries
+    val mode = builder.mode
+    val tables = builder.tables
+
+    val dialect = database.dialect.name
+
+    val predefinedQueriesText = if (predefinedQueries.isNotEmpty()) {
+        """
+        **Predefined Queries:**
+        ${predefinedQueries.entries.joinToString("\n") { (id, query) ->
+            """
+            Query #$id: ${query.description}
+            Parameters: ${if (query.parameterDescriptions.isEmpty()) "None" else query.parameterDescriptions.joinToString(", ")}
+            
+            Response format:
+            {
+              "query_id": $id,
+              "parameters": [
+                {"value": "your_value", "type": "TYPE"},
+                ...
+              ]
+            }
+            
+            Valid parameter types: STRING, INTEGER, DECIMAL, BOOLEAN, DATE, TIMESTAMP
+            """
+                .trimIndent()
+        }}
+        
+        **Instructions for Predefined Queries:**
+        If a predefined query matches the user's intent, respond with a JSON object containing:
+        - `"query_id"`: The number of the predefined query to use
+        - `"parameters"`: An array of parameter objects, each containing:
+          - `"value"`: The parameter value as a string
+          - `"type"`: One of: "STRING", "INTEGER", "DECIMAL", "BOOLEAN", "DATE", "TIMESTAMP"
+        
+        Example: {
+          "query_id": 1, 
+          "parameters": [
+            {"value": "John", "type": "STRING"},
+            {"value": "2024-01-01", "type": "DATE"}
+          ]
+        }
+        """
+    } else {
+        ""
+    }
+
+    val customQueryInstructions = """
+        **Instructions for Custom SQL:**
+        Generate a JSON object containing:
+        - `"sql_template"`: A string containing the SQL query template. Use standard JDBC placeholders (`?`) for all user-provided values or literals derived from the request.
+        - `"parameters"`: A JSON array of objects, each containing:
+          - `"value"`: The parameter value as a string
+          - `"type"`: One of: "STRING", "INTEGER", "DECIMAL", "BOOLEAN", "DATE", "TIMESTAMP"
+        
+        Example: {
+          "sql_template": "SELECT * FROM users WHERE age > ? AND join_date > ?",
+          "parameters": [
+            {"value": "18", "type": "INTEGER"},
+            {"value": "2024-01-01", "type": "DATE"}
+          ]
+        }
+        """
+
+    val modeSpecificInstructions = when (mode) {
+        DatabaseAgentMode.FREE -> {
+            customQueryInstructions
+        }
+        DatabaseAgentMode.PREDEFINED_ONLY -> {
+            if (predefinedQueries.isEmpty()) {
+                throw IllegalArgumentException("PREDEFINED_ONLY mode requires at least one predefined query")
+            }
+            predefinedQueriesText
+        }
+        DatabaseAgentMode.HYBRID -> {
+            if (predefinedQueries.isEmpty()) {
+                customQueryInstructions
+            } else {
+                """
+                $predefinedQueriesText
+                
+                $customQueryInstructions
+                
+                You can either:
+                1. Use a predefined query if it matches the user's intent exactly, or
+                2. Generate a custom SQL query, using the predefined queries as examples/reference
+                """
+            }
+        }
+    }
+
+    return """
+    You are an AI assistant that translates natural language questions into database queries for a $dialect database.
+    
+    **Database Schema:**
+    ```sql
+    ${getDdlForTables(tables)}
+    ```
+    
+    $modeSpecificInstructions
+    
+    Output **only** the raw JSON object, without any surrounding text or markdown formatting.
+    """.trimIndent()
 }

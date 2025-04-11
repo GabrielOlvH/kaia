@@ -1,9 +1,12 @@
 package dev.gabrielolv.kaia.core.agents
 
+import dev.gabrielolv.kaia.core.Conversation
+import dev.gabrielolv.kaia.core.Message
 import dev.gabrielolv.kaia.llm.LLMMessage
 import dev.gabrielolv.kaia.llm.LLMOptions
 import dev.gabrielolv.kaia.llm.LLMProvider
 import dev.gabrielolv.kaia.utils.*
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -12,123 +15,39 @@ import kotlinx.serialization.json.JsonNamingStrategy
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.Table
 
-
 @OptIn(ExperimentalSerializationApi::class)
 private val json = Json {
     namingStrategy = JsonNamingStrategy.SnakeCase
 }
 
-fun Agent.Companion.withDatabaseAccess(
-    provider: LLMProvider,
-    database: Database,
-    tables: List<Table>,
-    predefinedQueries: Map<Int, PreDefinedQuery> = emptyMap(),
-    mode: DatabaseAgentMode = DatabaseAgentMode.HYBRID,
-    block: AgentBuilder.() -> Unit
-): Agent {
-    val builder = AgentBuilder().apply(block)
+interface DatabaseQueryListener {
+    suspend fun onQueryExecuted(
+        sqlTemplate: String,
+        parameters: List<SqlParameter>,
+        results: List<Map<String, Any?>>?,
+        error: Exception?
+    )
+}
 
-    val dialect = database.dialect.name
-    
-    val predefinedQueriesText = if (predefinedQueries.isNotEmpty()) {
-        """
-        **Predefined Queries:**
-        ${predefinedQueries.entries.joinToString("\n") { (id, query) ->
-            """
-            Query #$id: ${query.description}
-            Parameters: ${if (query.parameterDescriptions.isEmpty()) "None" else query.parameterDescriptions.joinToString(", ")}
-            
-            Response format:
-            {
-              "query_id": $id,
-              "parameters": [
-                {"value": "your_value", "type": "TYPE"},
-                ...
-              ]
-            }
-            
-            Valid parameter types: STRING, INTEGER, DECIMAL, BOOLEAN, DATE, TIMESTAMP
-            """
-            .trimIndent()
-        }}
-        
-        **Instructions for Predefined Queries:**
-        If a predefined query matches the user's intent, respond with a JSON object containing:
-        - `"query_id"`: The number of the predefined query to use
-        - `"parameters"`: An array of parameter objects, each containing:
-          - `"value"`: The parameter value as a string
-          - `"type"`: One of: "STRING", "INTEGER", "DECIMAL", "BOOLEAN", "DATE", "TIMESTAMP"
-        
-        Example: {
-          "query_id": 1, 
-          "parameters": [
-            {"value": "John", "type": "STRING"},
-            {"value": "2024-01-01", "type": "DATE"}
-          ]
-        }
-        """
-    } else {
-        ""
-    }
-    
-    val customQueryInstructions = """
-        **Instructions for Custom SQL:**
-        Generate a JSON object containing:
-        - `"sql_template"`: A string containing the SQL query template. Use standard JDBC placeholders (`?`) for all user-provided values or literals derived from the request.
-        - `"parameters"`: A JSON array of objects, each containing:
-          - `"value"`: The parameter value as a string
-          - `"type"`: One of: "STRING", "INTEGER", "DECIMAL", "BOOLEAN", "DATE", "TIMESTAMP"
-        
-        Example: {
-          "sql_template": "SELECT * FROM users WHERE age > ? AND join_date > ?",
-          "parameters": [
-            {"value": "18", "type": "INTEGER"},
-            {"value": "2024-01-01", "type": "DATE"}
-          ]
-        }
-        """
-    
-    val modeSpecificInstructions = when (mode) {
-        DatabaseAgentMode.FREE -> {
-            customQueryInstructions
-        }
-        DatabaseAgentMode.PREDEFINED_ONLY -> {
-            if (predefinedQueries.isEmpty()) {
-                throw IllegalArgumentException("PREDEFINED_ONLY mode requires at least one predefined query")
-            }
-            predefinedQueriesText
-        }
-        DatabaseAgentMode.HYBRID -> {
-            if (predefinedQueries.isEmpty()) {
-                customQueryInstructions
-            } else {
-                """
-                $predefinedQueriesText
-                
-                $customQueryInstructions
-                
-                You can either:
-                1. Use a predefined query if it matches the user's intent exactly, or
-                2. Generate a custom SQL query, using the predefined queries as examples/reference
-                """
-            }
-        }
-    }
-    
-    val prompt = """
-    You are an AI assistant that translates natural language questions into database queries for a $dialect database.
-    
-    **Database Schema:**
-    ```sql
-    ${getDdlForTables(tables)}
-    ```
-    
-    $modeSpecificInstructions
-    
-    Output **only** the raw JSON object, without any surrounding text or markdown formatting.
-    """
-    
-    builder.processor = processor@{ _, conversation ->
+class DatabaseAgentBuilder : AgentBuilder() {
+    var provider: LLMProvider? = null
+    var database: Database? = null
+    var tables: List<Table> = emptyList()
+    var predefinedQueries: Map<Int, PreDefinedQuery> = emptyMap()
+    var mode: DatabaseAgentMode = DatabaseAgentMode.HYBRID
+    var listeners: List<DatabaseQueryListener> = emptyList()
+}
+
+fun DatabaseAgentBuilder.buildProcessor(): (Message, Conversation) -> Flow<LLMMessage> {
+    requireNotNull(provider) { "LLMProvider must be set" }
+    requireNotNull(database) { "Database must be set" }
+    require(tables.isNotEmpty()) { "Tables list cannot be empty" }
+
+    val provider = provider!!
+    val database = database!!
+    val prompt = buildPrompt(this)
+
+    return { _, conversation ->
         flow {
             val options = LLMOptions(
                 responseFormat = "json_object",
@@ -137,25 +56,25 @@ fun Agent.Companion.withDatabaseAccess(
             )
             val response = provider.generate(conversation.messages, options).toList().last { it is LLMMessage.AssistantMessage }
             val responseContent = (response as LLMMessage.AssistantMessage).content
-            
+
             try {
                 when (mode) {
                     DatabaseAgentMode.FREE -> {
                         val generatedSql = json.decodeFromString<GeneratedSql>(responseContent)
                         emit(LLMMessage.SystemMessage("Query Template: ${generatedSql.sqlTemplate}\nQuery Parameters: ${generatedSql.parameters}"))
-                        emit(execute(database, generatedSql))
+                        emit(execute(database, generatedSql, listeners))
                     }
                     DatabaseAgentMode.PREDEFINED_ONLY -> {
                         val selection = json.decodeFromString<PreDefinedQuerySelection>(responseContent)
                         val predefinedQuery = predefinedQueries[selection.queryId]
-                        
+
                         if (predefinedQuery != null) {
                             emit(LLMMessage.SystemMessage("Using predefined query #${selection.queryId}: ${predefinedQuery.description}"))
                             val generatedSql = GeneratedSql(
                                 sqlTemplate = predefinedQuery.sqlTemplate,
                                 parameters = selection.parameters
                             )
-                            emit(execute(database, generatedSql))
+                            emit(execute(database, generatedSql, listeners))
                         } else {
                             emit(LLMMessage.SystemMessage("Error: Predefined query #${selection.queryId} does not exist"))
                         }
@@ -172,7 +91,7 @@ fun Agent.Companion.withDatabaseAccess(
                                         sqlTemplate = predefinedQuery.sqlTemplate,
                                         parameters = selection.parameters
                                     )
-                                    emit(execute(database, generatedSql))
+                                    emit(execute(database, generatedSql, listeners))
                                     return@flow
                                 } else {
                                     emit(LLMMessage.SystemMessage("Error: Predefined query #${selection.queryId} does not exist. Falling back to custom SQL generation."))
@@ -184,7 +103,7 @@ fun Agent.Companion.withDatabaseAccess(
 
                         val generatedSql = json.decodeFromString<GeneratedSql>(responseContent)
                         emit(LLMMessage.SystemMessage("Query Template: ${generatedSql.sqlTemplate}\nQuery Parameters: ${generatedSql.parameters}"))
-                        emit(execute(database, generatedSql))
+                        emit(execute(database, generatedSql, listeners))
                     }
                 }
             } catch (e: Exception) {
@@ -192,6 +111,10 @@ fun Agent.Companion.withDatabaseAccess(
             }
         }
     }
+}
 
+fun Agent.Companion.withDatabaseAccess(block: DatabaseAgentBuilder.() -> Unit): Agent {
+    val builder = DatabaseAgentBuilder().apply(block)
+    builder.processor = builder.buildProcessor()
     return builder.build()
 }
