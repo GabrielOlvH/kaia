@@ -3,6 +3,8 @@ package dev.gabrielolv.kaia.utils
 import dev.gabrielolv.kaia.core.agents.DatabaseAgentBuilder
 import dev.gabrielolv.kaia.core.agents.DatabaseQueryListener
 import dev.gabrielolv.kaia.llm.LLMMessage
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.exposed.sql.Database
@@ -104,9 +106,9 @@ private fun convertParameter(param: SqlParameter): Any? {
 }
 
 /**
- * Executes a SQL query on the given database and returns the results as an LLM message.
+ * Executes a SQL query on the given database and returns the results as a flow of LLM messages.
  */
-suspend fun execute(database: Database, generatedSql: GeneratedSql, listener: DatabaseQueryListener?): LLMMessage {
+fun execute(database: Database, generatedSql: GeneratedSql, listener: DatabaseQueryListener?): Flow<LLMMessage> = flow {
     val (rows, error) = transaction(database) {
         try {
             val stmt = connection.prepareStatement(generatedSql.sqlTemplate, false)
@@ -120,7 +122,6 @@ suspend fun execute(database: Database, generatedSql: GeneratedSql, listener: Da
                 }
             }
 
-            // Execute and process results
             stmt.executeQuery().use { resultSet ->
                 mapResultSetToRows(resultSet) to null
             }
@@ -130,16 +131,20 @@ suspend fun execute(database: Database, generatedSql: GeneratedSql, listener: Da
         }
     }
 
-    listener?.invoke(generatedSql.sqlTemplate, generatedSql.parameters, rows, error)
-
-    return when {
+    val defaultMessage = when {
         error != null -> LLMMessage.SystemMessage("There was an error while executing the query: ${error.message}")
         rows != null -> {
             val resultsText = formatResults(rows)
             LLMMessage.SystemMessage("Query Results:\n$resultsText")
         }
-
         else -> LLMMessage.SystemMessage("Unreachable. If you see this, cry.")
+    }
+    emit(defaultMessage)
+
+    listener?.let {
+        it(generatedSql.sqlTemplate, generatedSql.parameters, rows, error).collect { message ->
+            emit(message)
+        }
     }
 }
 

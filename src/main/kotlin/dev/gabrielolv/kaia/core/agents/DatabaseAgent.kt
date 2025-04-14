@@ -20,7 +20,7 @@ private val json = Json {
     namingStrategy = JsonNamingStrategy.SnakeCase
 }
 
-typealias DatabaseQueryListener = suspend (sqlTemplate: String, parameters: List<SqlParameter>, results: List<Map<String, Any?>>?, error: Exception?) -> Unit
+typealias DatabaseQueryListener = suspend (sqlTemplate: String, parameters: List<SqlParameter>, results: List<Map<String, Any?>>?, error: Exception?) -> Flow<LLMMessage>
 
 class DatabaseAgentBuilder : AgentBuilder() {
     var provider: LLMProvider? = null
@@ -55,7 +55,7 @@ fun DatabaseAgentBuilder.buildProcessor(): (Message, Conversation) -> Flow<LLMMe
                     QueryGenerationRule.UNRESTRICTED -> {
                         val generatedSql = json.decodeFromString<GeneratedSql>(responseContent)
                         emit(LLMMessage.SystemMessage("Query Template: ${generatedSql.sqlTemplate}\nQuery Parameters: ${generatedSql.parameters}"))
-                        emit(execute(database, generatedSql, listener))
+                        execute(database, generatedSql, listener).collect(::emit)
                     }
                     QueryGenerationRule.STRICT -> {
                         val selection = json.decodeFromString<PreDefinedQuerySelection>(responseContent)
@@ -67,7 +67,7 @@ fun DatabaseAgentBuilder.buildProcessor(): (Message, Conversation) -> Flow<LLMMe
                                 sqlTemplate = predefinedQuery.sqlTemplate,
                                 parameters = selection.parameters
                             )
-                            emit(execute(database, generatedSql, listener))
+                            execute(database, generatedSql, listener).collect(::emit)
                         } else {
                             emit(LLMMessage.SystemMessage("Error: Predefined query #${selection.queryId} does not exist"))
                         }
@@ -84,7 +84,7 @@ fun DatabaseAgentBuilder.buildProcessor(): (Message, Conversation) -> Flow<LLMMe
                                         sqlTemplate = predefinedQuery.sqlTemplate,
                                         parameters = selection.parameters
                                     )
-                                    emit(execute(database, generatedSql, listener))
+                                    execute(database, generatedSql, listener).collect(::emit)
                                     return@flow
                                 } else {
                                     emit(LLMMessage.SystemMessage("Error: Predefined query #${selection.queryId} does not exist. Falling back to custom SQL generation."))
@@ -96,7 +96,7 @@ fun DatabaseAgentBuilder.buildProcessor(): (Message, Conversation) -> Flow<LLMMe
 
                         val generatedSql = json.decodeFromString<GeneratedSql>(responseContent)
                         emit(LLMMessage.SystemMessage("Query Template: ${generatedSql.sqlTemplate}\nQuery Parameters: ${generatedSql.parameters}"))
-                        emit(execute(database, generatedSql, listener))
+                        execute(database, generatedSql, listener).collect(::emit)
                     }
                 }
             } catch (e: Exception) {
