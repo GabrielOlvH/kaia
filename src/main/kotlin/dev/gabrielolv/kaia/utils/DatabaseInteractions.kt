@@ -12,6 +12,8 @@ import org.jetbrains.exposed.sql.Table
 import org.jetbrains.exposed.sql.VarCharColumnType
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.sql.ResultSet
+import java.time.LocalDate
+import java.time.LocalDateTime
 
 /**
  * Defines the operating mode for database agents.
@@ -100,8 +102,8 @@ private fun convertParameter(param: SqlParameter): Any? {
         SqlParameterType.INTEGER -> param.value.content.toInt()
         SqlParameterType.DECIMAL -> param.value.content.toBigDecimal()
         SqlParameterType.BOOLEAN -> param.value.content.toBoolean()
-        SqlParameterType.DATE -> java.sql.Date.valueOf(param.value.content)
-        SqlParameterType.TIMESTAMP -> java.sql.Timestamp.valueOf(param.value.content)
+        SqlParameterType.DATE -> LocalDate.parse(param.value.content)
+        SqlParameterType.TIMESTAMP -> LocalDateTime.parse(param.value.content)
     }
 }
 
@@ -195,40 +197,15 @@ fun buildPrompt(builder: DatabaseAgentBuilder): String {
 
     val predefinedQueriesText = if (predefinedQueries.isNotEmpty()) {
         """
-        **Predefined Queries:**
+        **Predefined Queries (For Reference):**
         ${predefinedQueries.entries.joinToString("\n") { (id, query) ->
             """
             Query #$id: ${query.description}
             Parameters: ${if (query.parameterDescriptions.isEmpty()) "None" else query.parameterDescriptions.joinToString(", ")}
-            
-            Response format:
-            {
-              "query_id": $id,
-              "parameters": [
-                {"value": "your_value", "type": "TYPE"},
-                ...
-              ]
-            }
-            
-            Valid parameter types: STRING, INTEGER, DECIMAL, BOOLEAN, DATE, TIMESTAMP
+            SQL: ${query.sqlTemplate}
             """
                 .trimIndent()
         }}
-        
-        **Instructions for Predefined Queries:**
-        If a predefined query matches the user's intent, respond with a JSON object containing:
-        - `"query_id"`: The number of the predefined query to use
-        - `"parameters"`: An array of parameter objects, each containing:
-          - `"value"`: The parameter value as a string
-          - `"type"`: One of: "STRING", "INTEGER", "DECIMAL", "BOOLEAN", "DATE", "TIMESTAMP"
-        
-        Example: {
-          "query_id": 1, 
-          "parameters": [
-            {"value": "John", "type": "STRING"},
-            {"value": "2024-01-01", "type": "DATE"}
-          ]
-        }
         """
     } else {
         ""
@@ -241,6 +218,10 @@ fun buildPrompt(builder: DatabaseAgentBuilder): String {
         - `"parameters"`: A JSON array of objects, each containing:
           - `"value"`: The parameter value as a string
           - `"type"`: One of: "STRING", "INTEGER", "DECIMAL", "BOOLEAN", "DATE", "TIMESTAMP"
+        
+        For date and timestamp values:
+        - DATE must be in ISO-8601 format: "yyyy-MM-dd" (e.g., "2024-01-01")
+        - TIMESTAMP must be in ISO-8601 format: "yyyy-MM-ddTHH:mm:ss" (e.g., "2024-01-01T13:45:30")
         
         Example: {
           "sql_template": "SELECT * FROM users WHERE age > ? AND join_date > ?",
@@ -257,7 +238,7 @@ fun buildPrompt(builder: DatabaseAgentBuilder): String {
         }
         QueryGenerationRule.STRICT -> {
             if (predefinedQueries.isEmpty()) {
-                throw IllegalArgumentException("PREDEFINED_ONLY mode requires at least one predefined query")
+                throw IllegalArgumentException("STRICT mode requires at least one predefined query")
             }
             predefinedQueriesText
         }
@@ -270,9 +251,7 @@ fun buildPrompt(builder: DatabaseAgentBuilder): String {
                 
                 $customQueryInstructions
                 
-                You can either:
-                1. Use a predefined query if it matches the user's intent exactly, or
-                2. Generate a custom SQL query, using the predefined queries as examples/reference
+                Use the predefined queries as examples/reference to understand query patterns, but always generate a custom SQL query based on the user's request.
                 """
             }
         }

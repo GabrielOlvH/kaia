@@ -73,27 +73,6 @@ fun DatabaseAgentBuilder.buildProcessor(): (Message, Conversation) -> Flow<LLMMe
                         }
                     }
                     QueryGenerationRule.LOOSE -> {
-                        if (responseContent.contains("query_id") && predefinedQueries.isNotEmpty()) {
-                            try {
-                                val selection = json.decodeFromString<PreDefinedQuerySelection>(responseContent)
-                                val predefinedQuery = predefinedQueries[selection.queryId]
-
-                                if (predefinedQuery != null) {
-                                    emit(LLMMessage.SystemMessage("Using predefined query #${selection.queryId}: ${predefinedQuery.description}"))
-                                    val generatedSql = GeneratedSql(
-                                        sqlTemplate = predefinedQuery.sqlTemplate,
-                                        parameters = selection.parameters
-                                    )
-                                    execute(database, generatedSql, listener).collect(::emit)
-                                    return@flow
-                                } else {
-                                    emit(LLMMessage.SystemMessage("Error: Predefined query #${selection.queryId} does not exist. Falling back to custom SQL generation."))
-                                }
-                            } catch (e: Exception) {
-                                // Failed to parse as predefined query, continue to try custom SQL
-                            }
-                        }
-
                         val generatedSql = json.decodeFromString<GeneratedSql>(responseContent)
                         emit(LLMMessage.SystemMessage("Query Template: ${generatedSql.sqlTemplate}\nQuery Parameters: ${generatedSql.parameters}"))
                         execute(database, generatedSql, listener).collect(::emit)
@@ -111,3 +90,4 @@ fun Agent.Companion.withDatabaseAccess(block: DatabaseAgentBuilder.() -> Unit): 
     builder.processor = builder.buildProcessor()
     return builder.build()
 }
+
