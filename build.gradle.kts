@@ -107,9 +107,6 @@ publishing {
             // Use the 'java' component (includes main artifact and dependencies)
             from(components["java"])
 
-            // Include the sources JAR artifact
-            artifact(tasks.named("sourcesJar"))
-
             // Include the Javadoc JAR artifact
             artifact(javadocJar)
 
