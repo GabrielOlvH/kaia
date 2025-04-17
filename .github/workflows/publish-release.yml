@@ -1,0 +1,48 @@
+# .github/workflows/publish-release.yml
+
+name: Publish Release to GitHub Packages
+
+# Trigger the workflow only when a new GitHub Release is created
+on:
+  release:
+    types: [created] # Only run on the 'created' event for releases
+
+jobs:
+  publish:
+    name: Build and Publish Release
+    runs-on: ubuntu-latest # Use the latest Ubuntu runner
+
+    # Grant permissions for the GITHUB_TOKEN to upload packages
+    permissions:
+      contents: read # Needed to check out the repository code
+      packages: write # Needed to publish packages to GitHub Packages
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        # Checks out the code associated with the release tag
+
+      - name: Set up JDK 19
+        uses: actions/setup-java@v4
+        with:
+          java-version: '19' # Match the jvmToolchain version in build.gradle.kts
+          distribution: 'temurin' # A popular OpenJDK distribution
+          cache: 'gradle' # Enable caching for Gradle dependencies
+
+      - name: Extract release version number
+        # Gets the tag name from the release event (e.g., "v1.0.0" or "1.0.0")
+        # Removes the 'v' prefix if it exists, as Gradle likely expects just the number
+        run: echo "RELEASE_VERSION=$(echo ${{ github.ref_name }} | sed 's/^v//')" >> $GITHUB_ENV
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Publish package
+        # Runs the 'publish' task defined in your build.gradle.kts
+        # Passes the extracted release version as the 'libVersion' project property (-P)
+        # Uses the automatically provided GITHUB_TOKEN for authentication
+        run: ./gradlew publish -PlibVersion=${{ env.RELEASE_VERSION }}
+        env:
+          # Your build.gradle.kts expects these environment variables for credentials
+          GITHUB_ACTOR: ${{ github.actor }} # The user/actor who triggered the workflow
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Automatically generated token with permissions defined above
