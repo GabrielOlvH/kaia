@@ -88,8 +88,7 @@ publishing {
             //from(components["java"])
 
             artifact(tasks.named("jar"))
-            // Artifact ID defaults to project name ("kaia"). Override if needed:
-            // artifactId = "kaia-library"
+            artifactId = "kaia"
 
             // --- POM Metadata (Customize as needed) ---
             pom {
