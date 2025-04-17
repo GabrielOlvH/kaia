@@ -4,7 +4,6 @@ plugins {
     kotlin("jvm") version libs.versions.kotlin.get()
     kotlin("plugin.serialization") version libs.versions.kotlin.get()
     `maven-publish`
-    id("org.jetbrains.dokka") version "1.9.20" // Add Dokka for Javadoc/KDoc JARs
 }
 
 // --- Versioning Logic (Keep as is) ---
@@ -78,19 +77,9 @@ kotlin {
     jvmToolchain(19)
 }
 
-// --- Configure Java component to include sources ---
 java {
-    withSourcesJar()
+    //withSourcesJar()
 }
-
-// --- Configure Dokka for Javadoc/KDoc generation ---
-tasks.withType<DokkaTaskPartial>().configureEach {
-    dokkaSourceSets.configureEach {
-        // You can add Dokka configuration here if needed
-        // e.g., includes.from("Module.md")
-    }
-}
-
 
 // --- Publishing Configuration ---
 publishing {
