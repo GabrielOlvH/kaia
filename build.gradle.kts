@@ -78,7 +78,7 @@ kotlin {
 }
 
 java {
-    //withSourcesJar()
+    withSourcesJar()
 }
 
 // --- Publishing Configuration ---
@@ -87,8 +87,9 @@ publishing {
         // Publication name can be anything (e.g., "gpr", "maven", "release")
         create<MavenPublication>("gpr") { // Changed name to "gpr" for clarity
             // Use the 'java' component (includes main artifact and dependencies)
-            from(components["java"])
+            //from(components["java"])
 
+            artifact(tasks.named("jar"))
             // Artifact ID defaults to project name ("kaia"). Override if needed:
             // artifactId = "kaia-library"
 
