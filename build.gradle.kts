@@ -91,13 +91,6 @@ tasks.withType<DokkaTaskPartial>().configureEach {
     }
 }
 
-// --- Task to create the Javadoc JAR from Dokka output ---
-val javadocJar by tasks.registering(Jar::class) {
-    dependsOn(tasks.dokkaHtml) // Depends on the main Dokka task
-    archiveClassifier.set("javadoc")
-    from(tasks.dokkaHtml.flatMap { it.outputDirectory })
-}
-
 
 // --- Publishing Configuration ---
 publishing {
@@ -106,9 +99,6 @@ publishing {
         create<MavenPublication>("gpr") { // Changed name to "gpr" for clarity
             // Use the 'java' component (includes main artifact and dependencies)
             from(components["java"])
-
-            // Include the Javadoc JAR artifact
-            artifact(javadocJar)
 
             // Artifact ID defaults to project name ("kaia"). Override if needed:
             // artifactId = "kaia-library"
@@ -157,15 +147,5 @@ publishing {
                 password = System.getenv("GITHUB_TOKEN")
             }
         }
-        // Remove or comment out the old Sonatype Nexus repository block
-        /*
-        maven {
-            name = "SonatypeNexus"
-            // ... old Sonatype config ...
-        }
-        */
     }
 }
-
-// No need for explicit dependsOn(tasks.build) for PublishToMavenRepository
-// The plugin usually handles task dependencies correctly.
