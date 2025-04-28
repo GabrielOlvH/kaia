@@ -9,6 +9,18 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.flow.mapNotNull
 
+fun Agent.Companion.director(block: DirectorAgentBuilder.() -> Unit): Agent {
+    val builder = DirectorAgentBuilder().apply(block)
+
+    builder.id.ifBlank { builder.id = "director-agent" }
+    builder.name.ifBlank { builder.name = "Step-by-Step Director" }
+    builder.description.ifBlank { builder.description = "Determines the next best step or completion status for a request." }
+
+    builder.processor = builder.buildProcessor()
+
+    return builder.build()
+}
+
 // Define the builder class
 class DirectorAgentBuilder : AgentBuilder() {
     var provider: LLMProvider? = null
@@ -146,16 +158,4 @@ fun DirectorAgentBuilder.buildProcessor(): (LLMMessage.UserMessage, Conversation
             }
         }
     }
-}
-
-fun Agent.Companion.withDirectorAgent(block: DirectorAgentBuilder.() -> Unit): Agent {
-    val builder = DirectorAgentBuilder().apply(block)
-
-    builder.id.ifBlank { builder.id = "director-agent" }
-    builder.name.ifBlank { builder.name = "Step-by-Step Director" }
-    builder.description.ifBlank { builder.description = "Determines the next best step or completion status for a request." }
-
-    builder.processor = builder.buildProcessor()
-
-    return builder.build()
 }
