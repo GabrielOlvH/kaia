@@ -42,7 +42,7 @@ kotlin {
     // Use presets if you prefer, but explicit definition is clear
     linuxX64()
     macosX64()
-    mingwX64() // Windows
+    mingwX64()
 
     sourceSets {
 
@@ -63,10 +63,7 @@ kotlin {
                 implementation(libs.ktor.client.core)
                 implementation(libs.ktor.client.content.negotiation)
                 implementation(libs.ktor.serialization.kotlinx.json)
-
-                // SQLDelight runtime for multiplatform
                 implementation("app.cash.sqldelight:runtime:2.0.1")
-                // Coroutines extensions might be multiplatform or need platform specifics
                 implementation("app.cash.sqldelight:coroutines-extensions:2.0.1")
 
             }
@@ -95,21 +92,18 @@ kotlin {
         }
 
         val desktopMain by creating {
-            dependsOn(commonMain) // Inherit dependencies from commonMain
+
+            dependsOn(commonMain)
             dependencies {
+
                 implementation("io.ktor:ktor-client-curl:3.1.1")
-
+                implementation("app.cash.sqldelight:native-driver:2.0.2")
             }
         }
 
-        val desktopTest by creating {
-            dependencies {
-                implementation("io.kotest:kotest-runner-native:5.9.1")
-            }
-        }
-        linuxX64Main.get().dependsOn(desktopMain)
-        mingwX64Main.get().dependsOn(desktopMain)
-        macosX64Main.get().dependsOn(desktopMain)
+        linuxX64Main.get().dependsOn(desktopMain) // Linux depends directly on common or desktopMain
+        mingwX64Main.get().dependsOn(desktopMain) // Windows depends directly on common or desktopMain
+        macosX64Main.get().dependsOn(desktopMain) // macOS depends directly on common or desktopMain
     }
 }
 
