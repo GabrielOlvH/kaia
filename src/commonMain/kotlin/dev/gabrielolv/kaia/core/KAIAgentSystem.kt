@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.emptyFlow
  */
 class KAIAgentSystemBuilder internal constructor() { // Make constructor internal
     internal val agents: MutableList<Agent> = mutableListOf() // Keep internal for helpers
-    private var directorAgentFactory: ((agentDatabase: Map<String, String>) -> Agent)? = null
+    private var directorAgentId: String? = null // Added: Store the ID of the designated director
 
     /**
      * Adds a specialized agent to the system.
@@ -20,46 +20,37 @@ class KAIAgentSystemBuilder internal constructor() { // Make constructor interna
         this.agents.add(agent)
     }
 
+    fun getAgentDatabase(): Map<String, String> {
+        return agents.associate { agent -> agent.id to agent.description }
+    }
+
     /**
-     * Sets the factory function responsible for creating the DirectorAgent.
-     * The factory lambda receives the automatically generated agent database
-     * (containing agents added via `addAgent` or helpers) and must return
-     * a fully configured DirectorAgent instance.
+     * Designates a previously added agent as the director agent for the system.
+     * This agent will be responsible for routing tasks to other specialized agents.
      *
-     * Example:
-     * ```kotlin
-     * setDirectorAgentFactory { db ->
-     *     Agent.withDirectorAgent {
-     *         provider = myDirectorProvider
-     *         fallbackAgent = myFallbackAgent // Must be defined outside
-     *         agentDatabase = db // Use the provided database
-     *         // ... other custom director config
-     *     }
-     * }
-     * ```
-     * This factory is required.
+     * @param agentId The unique ID of the agent to designate as the director.
+     *                This agent must have been added via `addAgent` or a helper extension.
+     * @throws IllegalArgumentException if the provided agentId does not correspond to any added agent.
      */
-    fun setDirectorAgentFactory(factory: (agentDatabase: Map<String, String>) -> Agent) {
-        this.directorAgentFactory = factory
+    fun designateDirector(agentId: String) {
+        require(agents.any { it.id == agentId }) { "Agent with ID '$agentId' not found. Ensure the director agent is added before designating." }
+        this.directorAgentId = agentId
     }
 
     internal fun build(): KAIAgentSystem {
-        val factory = requireNotNull(directorAgentFactory) { "Director agent factory must be set using setDirectorAgentFactory()" }
+        // Require that a director has been designated
+        val designatedDirectorId = requireNotNull(directorAgentId) { "A director agent must be designated using designateDirector()" }
 
         val orchestrator = Orchestrator()
-        agents.forEach { orchestrator.addAgent(it) }
-
-        val agentDatabase = orchestrator.getAgentDatabase()
-
-        val directorAgent = factory(agentDatabase)
-
-        orchestrator.addAgent(directorAgent)
+        agents.forEach { orchestrator.addAgent(it) } // Add all agents first
 
         val handoffManager = HandoffManager(orchestrator)
 
-        return KAIAgentSystem(handoffManager, directorAgent.id)
+        // Pass the designated director ID to the KAIAgentSystem
+        return KAIAgentSystem(handoffManager, designatedDirectorId)
     }
 }
+
 
 /**
  * Represents the result of starting a new conversation run.
@@ -74,8 +65,8 @@ data class RunResult(
  * Manages Orchestrator, HandoffManager, and Conversation lifecycle for simplified usage.
  */
 class KAIAgentSystem internal constructor(
-    private val handoffManager: HandoffManager,
-    private val directorAgentId: String
+    val handoffManager: HandoffManager,
+    private val directorAgentId: String // This remains the same, just sourced differently
 ) {
 
     /**
