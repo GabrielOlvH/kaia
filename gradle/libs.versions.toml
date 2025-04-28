@@ -7,7 +7,7 @@ ktor = "3.1.1"
 kotest = "5.9.1"
 mockk = "1.13.17"
 exposed = "0.60.0"
-ulid-creator = "5.2.3"
+ulid-kotlin = "1.3.0"
 
 [libraries]
 # Arrow dependencies
@@ -27,7 +27,7 @@ ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx
 ktor-client-cio-jvm = { module = "io.ktor:ktor-client-cio-jvm", version.ref = "ktor" }
 
 # Additional dependencies
-ulid-creator = { module = "com.github.f4b6a3:ulid-creator", version.ref = "ulid-creator" }
+ulid-kotlin = { module = "com.aallam.ulid:ulid-kotlin", version.ref = "ulid-kotlin" }
 exposed-core = { module = "org.jetbrains.exposed:exposed-core", version.ref = "exposed" }
 exposed-dao = { module = "org.jetbrains.exposed:exposed-dao", version.ref = "exposed" }
 exposed-jdbc = { module = "org.jetbrains.exposed:exposed-jdbc", version.ref = "exposed" }
