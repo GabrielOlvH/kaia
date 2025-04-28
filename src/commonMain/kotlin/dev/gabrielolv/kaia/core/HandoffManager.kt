@@ -18,7 +18,7 @@ class HandoffManager(
     /**
      * Start a new conversation. The initial agent is now the planner.
      */
-    fun startConversation(
+    suspend fun startConversation(
         conversationId: String = nextThreadId,
         initialMessageContent: String
     ): String {
@@ -26,12 +26,12 @@ class HandoffManager(
             id = conversationId,
             originalUserRequest = initialMessageContent
         )
-        conversations[conversationId] = conversation
+        lock.withLock { conversations[conversationId] = conversation }
         return conversationId
     }
 
-    fun getConversation(conversationId: String): Conversation? {
-        return conversations[conversationId]
+    suspend fun getConversation(conversationId: String): Conversation? {
+        return lock.withLock { conversations[conversationId] }
     }
 
     /**
@@ -42,7 +42,7 @@ class HandoffManager(
         message: Message,
         directorAgentId: String, // ID of the agent created by withDirectorAgent
     ): Flow<LLMMessage>? {
-        val conversation = conversations[conversationId]
+        val conversation = lock.withLock { conversations[conversationId] }
             ?: return null // Or throw exception
 
         // Ensure original request is set if this is the very first user message
@@ -91,7 +91,7 @@ class HandoffManager(
         triggerMessage: Message, // The message that initiated this cycle
         scope: ProducerScope<LLMMessage>
     ) {
-        val conversation = conversations[conversationId] ?: return
+        val conversation = lock.withLock { conversations[conversationId] } ?: return
 
         suspend fun emitAndStore(message: LLMMessage) {
             scope.send(message)
@@ -249,11 +249,11 @@ class HandoffManager(
     }
 
 
-    fun getHistory(conversationId: String): List<LLMMessage>? {
-        return conversations[conversationId]?.messages?.toList()
+    suspend fun getHistory(conversationId: String): List<LLMMessage>? {
+        return lock.withLock { conversations[conversationId]?.messages?.toList() }
     }
 
-    fun getHandoffs(conversationId: String): List<Handoff>? {
-        return conversations[conversationId]?.handoffs?.toList()
+    suspend fun getHandoffs(conversationId: String): List<Handoff>? {
+        return lock.withLock { conversations[conversationId]?.handoffs?.toList() }
     }
 }
