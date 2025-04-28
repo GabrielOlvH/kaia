@@ -16,8 +16,9 @@ class KAIAgentSystemBuilder internal constructor() { // Make constructor interna
      * Adds a specialized agent to the system.
      * Use helper extensions like `addLLMAgent` or `addDatabaseAgent` for common types.
      */
-    fun addAgent(agent: Agent) {
+    fun addAgent(agent: Agent): Agent {
         this.agents.add(agent)
+        return agent
     }
 
     fun getAgentDatabase(): Map<String, String> {
