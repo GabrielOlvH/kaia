@@ -12,8 +12,6 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 
-// --- Enums and Data Classes (largely unchanged) ---
-
 enum class QueryGenerationRule {
     UNRESTRICTED,
     STRICT,

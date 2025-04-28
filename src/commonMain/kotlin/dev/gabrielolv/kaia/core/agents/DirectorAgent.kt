@@ -1,18 +1,31 @@
 package dev.gabrielolv.kaia.core.agents
 
+import dev.gabrielolv.kaia.core.Conversation
 import dev.gabrielolv.kaia.llm.LLMMessage
 import dev.gabrielolv.kaia.llm.LLMOptions
 import dev.gabrielolv.kaia.llm.LLMProvider
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.flow.mapNotNull
 
-fun Agent.Companion.withDirectorAgent(
-    provider: LLMProvider,
-    agentDatabase: Map<String, String>,
-    fallbackAgent: Agent,
-    block: AgentBuilder.() -> Unit
-): Agent {
+// Define the builder class
+class DirectorAgentBuilder : AgentBuilder() {
+    var provider: LLMProvider? = null
+    var agentDatabase: Map<String, String>? = null
+    var fallbackAgent: Agent? = null
+}
+
+// Define the buildProcessor extension function
+fun DirectorAgentBuilder.buildProcessor(): (LLMMessage.UserMessage, Conversation) -> Flow<LLMMessage> {
+    requireNotNull(provider) { "LLMProvider must be set for DirectorAgent" }
+    requireNotNull(agentDatabase) { "Agent database must be set for DirectorAgent" }
+    requireNotNull(fallbackAgent) { "Fallback agent must be set for DirectorAgent" }
+
+    val provider = provider!!
+    val agentDatabase = agentDatabase!!
+    val fallbackAgent = fallbackAgent!!
+
     val agentCatalog = agentDatabase.entries.joinToString("\n") {
         "${it.key}: ${it.value}"
     }
@@ -82,13 +95,7 @@ fun Agent.Companion.withDirectorAgent(
     Now, analyze the current state and decide the next action, completion, or if clarification is needed.
     """
 
-    val builder = AgentBuilder().apply(block)
-
-    builder.id.ifBlank { builder.id = "director-agent" }
-    builder.name.ifBlank { builder.name = "Step-by-Step Director" }
-    builder.description.ifBlank { builder.description = "Determines the next best step or completion status for a request." }
-
-    builder.processor = { message, conversation ->
+    return { message, conversation ->
         flow {
             val originalRequest = conversation.originalUserRequest
 
@@ -96,16 +103,16 @@ fun Agent.Companion.withDirectorAgent(
                 "No steps executed yet."
             } else {
                 conversation.executedSteps.mapIndexed { index, step ->
-                    val stepHeader = "Step ${index+1}: Agent: ${step.agentId}, Action: '${step.action}', Status: ${step.status}" +
-                    (step.error?.let { ", Error: $it" } ?: "")
-                    
+                    val stepHeader = "Step ${index+1}: Agent: ${step.agentId}, Action: \'${step.action}\', Status: ${step.status}" +
+                            (step.error?.let { ", Error: $it" } ?: "")
+
                     val messageContent = if (step.messages.isNotEmpty()) {
                         "\nAgent ${step.agentId} messages in this step:\n" + step.messages.filterIsInstance<LLMMessage.SystemMessage>()
-                            .joinToString("\n") { message -> message.content }
+                            .joinToString("\n") { msg -> msg.content } // Renamed 'message' to 'msg' to avoid clash
                     } else {
                         "\nNo messages recorded for this step."
                     }
-                    
+
                     "$stepHeader$messageContent\n"
                 }.joinToString("\n")
             }
@@ -139,5 +146,16 @@ fun Agent.Companion.withDirectorAgent(
             }
         }
     }
+}
+
+fun Agent.Companion.withDirectorAgent(block: DirectorAgentBuilder.() -> Unit): Agent {
+    val builder = DirectorAgentBuilder().apply(block)
+
+    builder.id.ifBlank { builder.id = "director-agent" }
+    builder.name.ifBlank { builder.name = "Step-by-Step Director" }
+    builder.description.ifBlank { builder.description = "Determines the next best step or completion status for a request." }
+
+    builder.processor = builder.buildProcessor()
+
     return builder.build()
 }

@@ -2,7 +2,6 @@ package dev.gabrielolv.kaia.core.agents
 
 import app.cash.sqldelight.db.SqlDriver
 import dev.gabrielolv.kaia.core.Conversation
-import dev.gabrielolv.kaia.core.Message
 import dev.gabrielolv.kaia.llm.LLMMessage
 import dev.gabrielolv.kaia.llm.LLMOptions
 import dev.gabrielolv.kaia.llm.LLMProvider
@@ -31,7 +30,7 @@ class DatabaseAgentBuilder : AgentBuilder() {
     var listener: DatabaseQueryListener? = null
 }
 
-fun DatabaseAgentBuilder.buildProcessor(): (Message, Conversation) -> Flow<LLMMessage> {
+fun DatabaseAgentBuilder.buildProcessor(): (LLMMessage.UserMessage, Conversation) -> Flow<LLMMessage> {
     requireNotNull(provider) { "LLMProvider must be set" }
     requireNotNull(driver) { "SqlDriver must be set" }
     requireNotNull(dialect) { "Database dialect must be set" } 

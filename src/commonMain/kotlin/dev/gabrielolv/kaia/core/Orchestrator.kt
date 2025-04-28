@@ -40,7 +40,7 @@ class Orchestrator(
 
     suspend fun processWithAgent(
         agentId: String,
-        message: Message,
+        message: LLMMessage.UserMessage,
         conversation: Conversation // Added conversation
     ): Flow<LLMMessage> {
         val agent = agents[agentId] ?: throw IllegalArgumentException("Agent $agentId not found")
@@ -53,14 +53,14 @@ class Orchestrator(
      */
     fun broadcast(
         conversation: Conversation, // Pass conversation directly
-        message: Message,
+        message: LLMMessage.UserMessage,
         agentIds: List<String>
     ): Flow<LLMMessage> = flow {
         agentIds.map { agentId ->
             scope.async {
                 try {
                     val agent = agents[agentId] ?: throw IllegalArgumentException("Agent $agentId not found")
-                    agent.process(message.copy(recipient = agentId), conversation).collect { emit(it) }
+                    agent.process(message.copy(), conversation).collect { emit(it) }
                 } catch (e: Exception) {
                     emit(
                         LLMMessage.SystemMessage(

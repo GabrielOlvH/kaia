@@ -39,7 +39,7 @@ class HandoffManager(
      */
     suspend fun sendMessage(
         conversationId: String,
-        message: Message,
+        message: LLMMessage.UserMessage,
         directorAgentId: String, // ID of the agent created by withDirectorAgent
     ): Flow<LLMMessage>? {
         val conversation = lock.withLock { conversations[conversationId] }
@@ -88,7 +88,7 @@ class HandoffManager(
     private suspend fun manageStepByStepExecution(
         conversationId: String,
         directorAgentId: String,
-        triggerMessage: Message, // The message that initiated this cycle
+        triggerMessage: LLMMessage.UserMessage, // The message that initiated this cycle
         scope: ProducerScope<LLMMessage>
     ) {
         val conversation = lock.withLock { conversations[conversationId] } ?: return
@@ -114,7 +114,6 @@ class HandoffManager(
             try {
                 val directorTrigger = triggerMessage.copy(
                     content = "Based on the history and original request, determine the next step or completion.",
-                    recipient = directorAgentId
                 )
                 conversation.messages.add(LLMMessage.UserMessage(directorTrigger.content))
 
@@ -204,8 +203,7 @@ class HandoffManager(
                     append("Your Current Task: ${nextStepInfo.action}")
                 }
                 val stepMessage = triggerMessage.copy(
-                    content = stepInputContent,
-                    recipient = agentToExecute.id
+                    content = stepInputContent
                 )
 
                 // Add the user message to the step's messages

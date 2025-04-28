@@ -84,7 +84,7 @@ internal class OpenAIProvider(
                 role = "assistant",
                 toolCalls = listOf(
                     ToolCall(
-                        id = id,
+                        id = toolCallId,
                         type = "function",
                         function = FunctionCall(name = name, arguments = json.encodeToString(arguments))
                     )

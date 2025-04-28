@@ -103,7 +103,7 @@ class OpenAIToolsProvider(
                 role = "assistant",
                 toolCalls = listOf(
                     ToolCall(
-                        id = id,
+                        id = toolCallId,
                         type = "function",
                         function = FunctionCall(name = name, arguments = json.encodeToString(arguments))
                     )
@@ -145,7 +145,7 @@ class OpenAIToolsProvider(
                 // Emit tool call message
                 emitMessage(
                     LLMMessage.ToolCallMessage(
-                        id = toolCall.id,
+                        toolCallId = toolCall.id,
                         name = toolName,
                         arguments = arguments
                     )

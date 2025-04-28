@@ -12,12 +12,6 @@ enum class StepStatus {
 }
 
 @Serializable
-data class WorkflowStepDescription(
-    val agentId: String,
-    val action: String
-)
-
-@Serializable
 data class NextStepInfo(
     val agentId: String,
     val action: String,

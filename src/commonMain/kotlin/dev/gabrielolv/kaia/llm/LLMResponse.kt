@@ -1,11 +1,12 @@
 package dev.gabrielolv.kaia.llm
 
+import dev.gabrielolv.kaia.utils.nextMessageId
 import kotlinx.serialization.json.JsonElement
 
 /**
  * Represents a message in the LLM conversation flow
  */
-sealed class LLMMessage {
+sealed class LLMMessage(val messageId: String = nextMessageId) {
     /**
      * User input message
      */
@@ -25,7 +26,7 @@ sealed class LLMMessage {
      * Tool call made by the assistant
      */
     data class ToolCallMessage(
-        val id: String,
+        val toolCallId: String,
         val name: String,
         val arguments: JsonElement
     ) : LLMMessage()
