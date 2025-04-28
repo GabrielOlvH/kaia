@@ -1,5 +1,6 @@
 package dev.gabrielolv.kaia.core.agents
 
+import app.cash.sqldelight.db.SqlDriver
 import dev.gabrielolv.kaia.core.Conversation
 import dev.gabrielolv.kaia.core.Message
 import dev.gabrielolv.kaia.llm.LLMMessage
@@ -12,8 +13,6 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNamingStrategy
-import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.Table
 
 @OptIn(ExperimentalSerializationApi::class)
 private val json = Json {
@@ -24,8 +23,9 @@ typealias DatabaseQueryListener = suspend (sqlTemplate: String, parameters: List
 
 class DatabaseAgentBuilder : AgentBuilder() {
     var provider: LLMProvider? = null
-    var database: Database? = null
-    var tables: List<Table> = emptyList()
+    var driver: SqlDriver? = null
+    var dialect: String? = null 
+    var schemaDescription: String? = null
     var predefinedQueries: Map<Int, PreDefinedQuery> = emptyMap()
     var queryGenerationRule: QueryGenerationRule = QueryGenerationRule.LOOSE
     var listener: DatabaseQueryListener? = null
@@ -33,12 +33,13 @@ class DatabaseAgentBuilder : AgentBuilder() {
 
 fun DatabaseAgentBuilder.buildProcessor(): (Message, Conversation) -> Flow<LLMMessage> {
     requireNotNull(provider) { "LLMProvider must be set" }
-    requireNotNull(database) { "Database must be set" }
-    require(tables.isNotEmpty()) { "Tables list cannot be empty" }
+    requireNotNull(driver) { "SqlDriver must be set" }
+    requireNotNull(dialect) { "Database dialect must be set" } 
+    requireNotNull(schemaDescription) { "Schema description must be provided" }
 
     val provider = provider!!
-    val database = database!!
-    val prompt = buildPrompt(this)
+    val driver = driver!!
+    val prompt = buildPrompt(this) 
 
     return { _, conversation ->
         flow {
@@ -55,7 +56,7 @@ fun DatabaseAgentBuilder.buildProcessor(): (Message, Conversation) -> Flow<LLMMe
                     QueryGenerationRule.UNRESTRICTED -> {
                         val generatedSql = json.decodeFromString<GeneratedSql>(responseContent)
                         emit(LLMMessage.SystemMessage("Query Template: ${generatedSql.sqlTemplate}\nQuery Parameters: ${generatedSql.parameters}"))
-                        execute(database, generatedSql, listener).collect(::emit)
+                        execute(driver, generatedSql, listener).collect(::emit)
                     }
                     QueryGenerationRule.STRICT -> {
                         val selection = json.decodeFromString<PreDefinedQuerySelection>(responseContent)
@@ -67,7 +68,7 @@ fun DatabaseAgentBuilder.buildProcessor(): (Message, Conversation) -> Flow<LLMMe
                                 sqlTemplate = predefinedQuery.sqlTemplate,
                                 parameters = selection.parameters
                             )
-                            execute(database, generatedSql, listener).collect(::emit)
+                            execute(driver, generatedSql, listener).collect(::emit)
                         } else {
                             emit(LLMMessage.SystemMessage("Error: Predefined query #${selection.queryId} does not exist"))
                         }
@@ -75,7 +76,7 @@ fun DatabaseAgentBuilder.buildProcessor(): (Message, Conversation) -> Flow<LLMMe
                     QueryGenerationRule.LOOSE -> {
                         val generatedSql = json.decodeFromString<GeneratedSql>(responseContent)
                         emit(LLMMessage.SystemMessage("Query Template: ${generatedSql.sqlTemplate}\nQuery Parameters: ${generatedSql.parameters}"))
-                        execute(database, generatedSql, listener).collect(::emit)
+                        execute(driver, generatedSql, listener).collect(::emit)
                     }
                 }
             } catch (e: Exception) {
@@ -90,4 +91,3 @@ fun Agent.Companion.withDatabaseAccess(block: DatabaseAgentBuilder.() -> Unit): 
     builder.processor = builder.buildProcessor()
     return builder.build()
 }
-

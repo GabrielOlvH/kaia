@@ -2,6 +2,7 @@ plugins {
     kotlin("jvm") version libs.versions.kotlin.get()
     kotlin("plugin.serialization") version libs.versions.kotlin.get()
     `maven-publish`
+    id("app.cash.sqldelight") version "2.0.1"
 }
 
 
@@ -47,24 +48,18 @@ dependencies {
     implementation(libs.ktor.client.cio)
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
-    implementation(libs.ktor.client.cio.jvm)
-    implementation(libs.exposed.core)
-    implementation(libs.exposed.dao)
-    implementation(libs.exposed.jdbc)
-    implementation(libs.exposed.datetime)
-    implementation("com.github.jsqlparser:jsqlparser:5.1")
-    implementation("com.h2database:h2:2.3.232")
+
+    // SQLDelight dependencies
+    implementation("app.cash.sqldelight:sqlite-driver:2.0.1")
+    implementation("app.cash.sqldelight:coroutines-extensions:2.0.1")
 
     // Test dependencies
     testImplementation(libs.kotest.runner.junit5)
     testImplementation(libs.kotest.assertions.core)
-    testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation("io.kotest:kotest-runner-junit5:5.9.1")
     testImplementation("io.kotest:kotest-assertions-core:5.8.0")
     testImplementation("io.kotest:kotest-property:5.9.1")
-
-    testImplementation("io.ktor:ktor-client-mock:3.1.2")
 
     testImplementation("io.ktor:ktor-client-content-negotiation:3.1.1")
     testImplementation("io.ktor:ktor-serialization-kotlinx-json:3.1.1")
@@ -144,4 +139,3 @@ publishing {
 tasks.withType<PublishToMavenRepository>().configureEach {
     dependsOn(tasks.build)
 }
-
