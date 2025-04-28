@@ -51,34 +51,31 @@ class HandoffManager(
         }
 
         return channelFlow {
-            lock.withLock {
-                // Add user message to history
-                val userMessage = LLMMessage.UserMessage(content = message.content)
-                conversation.append(userMessage)
-                // Don't emit the user message here, let the flow handle it if needed
+            val userMessage = LLMMessage.UserMessage(content = message.content)
+            conversation.append(userMessage)
 
-                try {
-                    manageStepByStepExecution(
-                        conversationId,
-                        directorAgentId,
-                        message, // Pass the current trigger message
-                        this // Pass the channelFlow scope
-                    )
-                } catch (e: Exception) {
-                    val errorMsg = LLMMessage.SystemMessage(
-                        content = "Step-by-step execution failed: ${e.message}"
-                    )
-                    send(errorMsg)
-                    conversation.append(errorMsg)
-                } finally {
-                    val lastExecuted = conversation.executedSteps.lastOrNull()
-                    if (lastExecuted?.status == StepStatus.COMPLETED && conversation.executedSteps.size > 0) {
-                        send(LLMMessage.SystemMessage("Processing complete."))
-                    } else if (conversation.executedSteps.any { it.status == StepStatus.FAILED }) {
-                        send(LLMMessage.SystemMessage("Processing finished with errors."))
-                    } else if (conversation.executedSteps.size >= maxSteps) {
-                        send(LLMMessage.SystemMessage("Processing stopped: Maximum step limit reached."))
-                    }
+
+            try {
+                manageStepByStepExecution(
+                    conversation,
+                    directorAgentId,
+                    message,
+                    this
+                )
+            } catch (e: Exception) {
+                val errorMsg = LLMMessage.SystemMessage(
+                    content = "Step-by-step execution failed: ${e.message}"
+                )
+                send(errorMsg)
+                conversation.append(errorMsg)
+            } finally {
+                val lastExecuted = conversation.executedSteps.lastOrNull()
+                if (lastExecuted?.status == StepStatus.COMPLETED && conversation.executedSteps.size > 0) {
+                    send(LLMMessage.SystemMessage("Processing complete."))
+                } else if (conversation.executedSteps.any { it.status == StepStatus.FAILED }) {
+                    send(LLMMessage.SystemMessage("Processing finished with errors."))
+                } else if (conversation.executedSteps.size >= maxSteps) {
+                    send(LLMMessage.SystemMessage("Processing stopped: Maximum step limit reached."))
                 }
             }
         }
@@ -86,12 +83,11 @@ class HandoffManager(
 
 
     private suspend fun manageStepByStepExecution(
-        conversationId: String,
+        conversation: Conversation,
         directorAgentId: String,
         triggerMessage: LLMMessage.UserMessage, // The message that initiated this cycle
         scope: ProducerScope<LLMMessage>
     ) {
-        val conversation = lock.withLock { conversations[conversationId] } ?: return
 
         suspend fun emitAndStore(message: LLMMessage) {
             scope.send(message)
