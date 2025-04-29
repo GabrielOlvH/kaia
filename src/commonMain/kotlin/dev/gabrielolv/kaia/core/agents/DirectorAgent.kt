@@ -26,6 +26,8 @@ class DirectorAgentBuilder : AgentBuilder() {
     var provider: LLMProvider? = null
     var agentDatabase: Map<String, String>? = null
     var fallbackAgent: Agent? = null
+    var extraInstructions: String? = null // Added: Optional extra instructions for the prompt
+    var customExamples: List<Pair<String, String>>? = null // Added: Optional custom examples (User Input -> Expected JSON Output)
 }
 
 // Define the buildProcessor extension function
@@ -42,9 +44,16 @@ fun DirectorAgentBuilder.buildProcessor(): (LLMMessage.UserMessage, Conversation
         "${it.key}: ${it.value}"
     }
 
+    val combinedInstructions = extraInstructions?.let { "\n\n$it" } ?: ""
+
+    val formattedCustomExamples = customExamples?.takeIf { it.isNotEmpty() }?.joinToString("\n\n") { (input, output) ->
+        "Example (Input: $input):\n$output"
+    }?.let { "\n\n$it" } ?: ""
+
     val directorPrompt = """
     You are a sophisticated AI orchestrator acting as a step-by-step director.
     Your task is to analyze the user's original request and the executed steps to determine the single best *next* action, or if the request is complete, OR if you need clarification from the user.
+    $combinedInstructions
 
     Available specialized agents:
     $agentCatalog
@@ -105,6 +114,7 @@ fun DirectorAgentBuilder.buildProcessor(): (LLMMessage.UserMessage, Conversation
     }
 
     Now, analyze the current state and decide the next action, completion, or if clarification is needed.
+    $formattedCustomExamples
     """
 
     return { message, conversation ->
