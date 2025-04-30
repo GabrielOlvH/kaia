@@ -1,5 +1,3 @@
-repositories.clear() // Ensure no project-level repos are declared
-
 plugins {
     kotlin("multiplatform") version "1.9.23"
     kotlin("plugin.serialization") version "1.9.23"
