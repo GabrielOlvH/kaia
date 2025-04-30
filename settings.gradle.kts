@@ -3,8 +3,7 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        // Add other repositories like your custom one if needed for *dependencies*
-        // maven { url = uri("https://maven.gabrielolv.dev/repository/maven-releases/") }
+        maven { url = uri("https://maven.pkg.jetbrains.space/public/p/kotlin/native/dev/") }
     }
 }
 
