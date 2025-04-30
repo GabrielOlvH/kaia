@@ -106,14 +106,15 @@ class KAIAgentSystem internal constructor(
      * @param input The user's follow-up message.
      * @return A flow of messages generated in response to this specific input.
      */
-    suspend fun run(conversationId: String, input: String): Flow<LLMMessage> {
+    suspend fun run(conversationId: String, input: String): RunResult {
         val message = LLMMessage.UserMessage(input)
         // HandoffManager now handles the AgentResult internally and emits LLMMessage
-        return handoffManager.sendMessage(conversationId, message, directorAgentId)
+        val flow = handoffManager.sendMessage(conversationId, message, directorAgentId)
             ?: run {
                 println("Error: Could not find conversation $conversationId to send message.")
                 emptyFlow()
             }
+        return RunResult(conversationId, flow)
     }
 
     companion object {
