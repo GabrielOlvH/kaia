@@ -180,6 +180,11 @@ class HandoffManager(
                 break
             }
 
+            if (directorOutput!!.waitForUserInput) {
+                emitAndStore(LLMMessage.SystemMessage("Director indicates task requires user input."))
+                break
+            }
+
             val nextStepInfo = directorOutput!!.nextStep
             if (nextStepInfo == null) {
                 emitAndStore(LLMMessage.SystemMessage("Director indicates task is not complete, but provided no next step. Halting."))
