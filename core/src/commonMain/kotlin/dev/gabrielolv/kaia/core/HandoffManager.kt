@@ -180,23 +180,16 @@ class HandoffManager(
                 break
             }
 
-            if (directorOutput!!.waitForUserInput) {
-                emitAndStore(LLMMessage.SystemMessage("Director indicates task requires user input."))
-                break
-            }
-
             val nextStepInfo = directorOutput!!.nextStep
             if (nextStepInfo == null) {
                 emitAndStore(LLMMessage.SystemMessage("Director indicates task is not complete, but provided no next step. Halting."))
                 break
             }
 
-            // 3. Execute the Step (Refactored Section)
             val agentToExecute = orchestrator.getAgent(nextStepInfo.agentId)
             if (agentToExecute == null) {
                 val errorMsg = LLMMessage.SystemMessage("Error: Agent '${nextStepInfo.agentId}' for step $currentStep not found. Halting.")
                 emitAndStore(errorMsg) // Use helper
-                // Mark step as failed in conversation history (optional, as we halt)
                 conversation.executedSteps.add(
                     ExecutedStep(
                         agentId = nextStepInfo.agentId,
@@ -352,6 +345,7 @@ class HandoffManager(
                         emitAndStore(noOutputMsg)
                     }
 
+
                     currentStep++ // Move to the next potential step ONLY if this step succeeded
                 }
 
@@ -368,7 +362,10 @@ class HandoffManager(
                 emitAndStore(LLMMessage.SystemMessage("Halting execution due to unhandled exception in step $currentStep."))
                 break // Exit the loop on failure
             }
-
+            if (directorOutput!!.waitForUserInput) {
+                emitAndStore(LLMMessage.SystemMessage("Director indicates task requires user input."))
+                break
+            }
         } // End while loop
 
         if (currentStep > maxSteps) {
