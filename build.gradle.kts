@@ -27,6 +27,13 @@ val libVersion: String by project
 group = "dev.gabrielolv"
 version = if (branch == "main") libVersion else "${libVersion}-${branch}"
 
-
 subprojects {
+    apply(plugin = "maven-publish")
+    afterEvaluate {
+        publishing {
+            repositories {
+                mavenLocal()
+            }
+        }
+    }
 }
