@@ -12,3 +12,4 @@ plugins {
 rootProject.name = "KAIAgents"
 
 include(":core", ":agents", ":tools", ":llm-providers")
+include(":examples")

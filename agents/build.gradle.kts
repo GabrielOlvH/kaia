@@ -1,8 +1,6 @@
 plugins {
     kotlin("multiplatform") version "1.9.23"
-    kotlin("plugin.serialization") version "1.9.23"
-
-    // id("app.cash.sqldelight") version "2.0.1" // Removed: No database defined in this module
+    alias(libs.plugins.kotlin.plugin.serialization)
 }
 
 kotlin {
@@ -28,12 +26,7 @@ kotlin {
                 api(project(":tools"))
 
                 // Add serialization explicitly as we use it directly here
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
-
-                // Add Ktor client if agents make direct HTTP calls (consider moving to :llm-providers)
-                // implementation(libs.ktor.client.core) // Provided transitively by :core or :llm-providers?
-                // implementation(libs.ktor.client.content.negotiation)
-                // implementation(libs.ktor.serialization.kotlinx.json)
+                implementation(libs.kotlinx.serialization.json)
             }
         }
         val commonTest by getting {
@@ -53,7 +46,6 @@ kotlin {
         }
         val jvmTest by getting {
              dependencies {
-                 implementation("org.jetbrains.kotlin:kotlin-test-junit5:1.9.23")
              }
         }
 

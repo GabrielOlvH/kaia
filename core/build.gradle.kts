@@ -1,18 +1,12 @@
 plugins {
-    kotlin("multiplatform") version "1.9.23"
-    kotlin("plugin.serialization") version "1.9.23"
+
+    alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.kotlin.plugin.serialization)
     // id("app.cash.sqldelight") version "2.0.1" // Commented out until DB is configured
 }
 
 kotlin {
-    jvm {
-        compilations.all {
-            kotlinOptions.jvmTarget = "1.8"
-        }
-        testRuns["test"].executionTask.configure {
-            useJUnitPlatform()
-        }
-    }
+    jvm()
     linuxX64()
     mingwX64()
 
@@ -20,15 +14,20 @@ kotlin {
         val commonMain by getting {
             dependencies {
                 implementation(kotlin("stdlib"))
-                api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
-                api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+
+                api(libs.ktor.client.cio)
+                api(libs.ktor.serialization.kotlinx.json)
+                api(libs.ktor.client.content.negotiation)
+                implementation("org.jetbrains.kotlin:kotlin-reflect:${libs.versions.kotlin.get()}")
+                api(libs.kotlinx.coroutines.core)
+                api(libs.kotlinx.serialization.json)
                 api("io.ktor:ktor-utils:2.3.9")
-                api("com.aallam.ulid:ulid-kotlin:1.3.0") // Added for ulid.ULID
-                api("io.ktor:ktor-client-core:2.3.9") // Added for expect HttpClient
+                api(libs.ulid.kotlin)
+                api(libs.ktor.client.core)
                 api("app.cash.sqldelight:runtime:2.0.1")
                 api("app.cash.sqldelight:coroutines-extensions:2.0.1")
-                api("io.arrow-kt:arrow-core:1.2.1")
-                api("io.arrow-kt:arrow-fx-coroutines:1.2.1")
+                api(libs.arrow.core)
+                api(libs.arrow.fx.coroutines)
             }
         }
         val commonTest by getting {
@@ -40,12 +39,12 @@ kotlin {
         val jvmMain by getting {
             dependencies {
                 implementation("app.cash.sqldelight:sqlite-driver:2.0.1")
-                implementation("io.ktor:ktor-client-cio:2.3.9") // Added for JVM actual HttpClient
+                implementation(libs.ktor.client.cio)
             }
         }
         val jvmTest by getting {
             dependencies {
-                implementation("org.jetbrains.kotlin:kotlin-test-junit5:1.9.23")
+
             }
         }
 
@@ -53,14 +52,14 @@ kotlin {
             dependsOn(commonMain)
             dependencies {
                 implementation("app.cash.sqldelight:native-driver:2.0.2")
-                implementation("io.ktor:ktor-client-curl:2.3.9") // Added for Native actual HttpClient
+                implementation("io.ktor:ktor-client-curl:2.3.9")
             }
         }
         val mingwX64Main by getting { 
             dependsOn(commonMain)
             dependencies {
                 implementation("app.cash.sqldelight:native-driver:2.0.2")
-                implementation("io.ktor:ktor-client-curl:2.3.9") // Added for Native actual HttpClient
+                implementation("io.ktor:ktor-client-curl:2.3.9")
             }
         }
     }

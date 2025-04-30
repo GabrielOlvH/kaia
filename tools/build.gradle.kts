@@ -1,18 +1,11 @@
 plugins {
-    kotlin("multiplatform") version "1.9.23"
-    kotlin("plugin.serialization") version "1.9.23"
+    alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.kotlin.plugin.serialization)
 }
 
 kotlin {
     // Define the targets matching :core
-    jvm {
-        compilations.all {
-            kotlinOptions.jvmTarget = "1.8"
-        }
-        testRuns["test"].executionTask.configure {
-            useJUnitPlatform()
-        }
-    }
+    jvm()
     linuxX64()
     mingwX64()
 
@@ -46,7 +39,6 @@ kotlin {
         }
         val jvmTest by getting {
              dependencies {
-                 implementation("org.jetbrains.kotlin:kotlin-test-junit5:1.9.23")
              }
         }
 

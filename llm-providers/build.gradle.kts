@@ -1,6 +1,6 @@
 plugins {
-    kotlin("multiplatform") version "1.9.23"
-    kotlin("plugin.serialization") version "1.9.23"
+    alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.kotlin.plugin.serialization)
 }
 
 kotlin {
@@ -23,10 +23,9 @@ kotlin {
                 api(project(":core")) // Providers depend on core (LLMMessage, etc.)
 
                 // Ktor client dependencies needed for API calls
-                // Use 'api' if the provider interfaces/classes expose Ktor types, 'implementation' otherwise
-                implementation("io.ktor:ktor-client-core:2.3.9")
-                implementation("io.ktor:ktor-client-content-negotiation:2.3.9")
-                implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.9")
+                implementation(libs.ktor.client.core)
+                implementation(libs.ktor.client.content.negotiation)
+                implementation(libs.ktor.serialization.kotlinx.json)
             }
         }
         val commonTest by getting {
@@ -41,12 +40,11 @@ kotlin {
         val jvmMain by getting {
              dependencies {
                  // Ktor engine for JVM
-                 implementation("io.ktor:ktor-client-cio:2.3.9")
+                 implementation(libs.ktor.client.cio)
              }
         }
         val jvmTest by getting {
              dependencies {
-                 implementation("org.jetbrains.kotlin:kotlin-test-junit5:1.9.23")
              }
         }
 
@@ -54,14 +52,14 @@ kotlin {
             dependsOn(commonMain)
             dependencies {
                 // Ktor engine for Native (Curl)
-                implementation("io.ktor:ktor-client-curl:2.3.9") // Moved from desktopMain
+                implementation("io.ktor:ktor-client-curl:2.3.9") // Not in TOML, keep as-is
             }
         }
         val mingwX64Main by getting { 
             dependsOn(commonMain)
             dependencies {
                 // Ktor engine for Native (Curl)
-                implementation("io.ktor:ktor-client-curl:2.3.9") // Moved from desktopMain
+                implementation("io.ktor:ktor-client-curl:2.3.9") // Not in TOML, keep as-is
             }
         }
     }
