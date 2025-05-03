@@ -37,6 +37,17 @@ val provider = LLMProvider.gemini(
 )
 ```
 
+For function calling support with Gemini, provide a `ToolManager`:
+
+```kotlin
+val provider = LLMProvider.gemini(
+    apiKey = "your-gemini-api-key",
+    baseUrl = "https://generativelanguage.googleapis.com",
+    model = "gemini-2.5-pro-latest",
+    toolManager = yourToolManager
+)
+```
+
 #### Available Gemini Models
 
 | Model | Description | Use Case |
@@ -55,6 +66,17 @@ val provider = LLMProvider.anthropic(
     apiKey = "your-anthropic-api-key",
     baseUrl = "https://api.anthropic.com/v1", // Optional, default value shown
     model = "claude-3-7-sonnet-20250219" // Optional, default value shown
+)
+```
+
+For tool use support with Claude, provide a `ToolManager`:
+
+```kotlin
+val provider = LLMProvider.anthropic(
+    apiKey = "your-anthropic-api-key",
+    baseUrl = "https://api.anthropic.com/v1",
+    model = "claude-3-7-sonnet-20250219",
+    toolManager = yourToolManager
 )
 ```
 
@@ -87,6 +109,8 @@ val provider = LLMProvider.custom(
 
 ## Usage Example
 
+### Basic Usage
+
 ```kotlin
 // Create a provider
 val provider = LLMProvider.gemini(apiKey = "your-gemini-api-key")
@@ -109,6 +133,40 @@ provider.generate(messages, options).collect { message ->
     when (message) {
         is LLMMessage.AssistantMessage -> println(message.content)
         is LLMMessage.SystemMessage -> println("System: ${message.content}")
+        else -> println("Received message of type: ${message::class.simpleName}")
+    }
+}
+```
+
+### Using Tools/Function Calling
+
+```kotlin
+// Create a tool manager and register tools
+val toolManager = ToolManager()
+toolManager.registerTool(
+    BaseTool(
+        name = "calculator",
+        description = "Performs basic arithmetic operations",
+        parameterSchema = buildJsonObject { /* ... */ },
+        executor = { toolCallId, parameters ->
+            // Execute the tool and return a result
+            ToolResult(toolCallId, true, "42")
+        }
+    )
+)
+
+// Create a provider with tool support
+val provider = LLMProvider.gemini(
+    apiKey = "your-gemini-api-key",
+    toolManager = toolManager
+)
+
+// Generate responses with tool calls
+provider.generate(messages, options).collect { message ->
+    when (message) {
+        is LLMMessage.AssistantMessage -> println("Assistant: ${message.content}")
+        is LLMMessage.ToolCallMessage -> println("Tool Call: ${message.name}(${message.arguments})")
+        is LLMMessage.ToolResponseMessage -> println("Tool Response: ${message.content}")
         else -> println("Received message of type: ${message::class.simpleName}")
     }
 }

@@ -37,14 +37,21 @@ interface LLMProvider {
          *
          * @param apiKey The API key for Google Gemini API.
          * @param baseUrl The base URL for the API, defaults to Google's Gemini API endpoint.
-         * @param model The model name to use, defaults to "gemini-2.5-pro-latest".
+         * @param model The model name to use, defaults to "gemini-1.5-flash".
+         * @param toolManager Optional tool manager for function calling support.
          * @return A configured Gemini LLM provider.
          */
         fun gemini(
             apiKey: String,
             baseUrl: String = "https://generativelanguage.googleapis.com",
-            model: String = "gemini-1.5-flash"
-        ): LLMProvider = GeminiProvider(apiKey, baseUrl, model)
+            model: String = "gemini-1.5-flash",
+            toolManager: ToolManager? = null
+        ): LLMProvider = if (toolManager != null) GeminiToolsProvider(
+            apiKey,
+            baseUrl,
+            model,
+            toolManager
+        ) else GeminiProvider(apiKey, baseUrl, model)
 
         /**
          * Create an Anthropic provider.
@@ -52,13 +59,20 @@ interface LLMProvider {
          * @param apiKey The API key for Anthropic API.
          * @param baseUrl The base URL for the API, defaults to Anthropic's API endpoint.
          * @param model The model name to use, defaults to "claude-3-7-sonnet-20250219".
+         * @param toolManager Optional tool manager for tool use support.
          * @return A configured Anthropic LLM provider.
          */
         fun anthropic(
             apiKey: String,
             baseUrl: String = "https://api.anthropic.com/v1",
-            model: String = "claude-3-7-sonnet-20250219"
-        ): LLMProvider = AnthropicProvider(apiKey, baseUrl, model)
+            model: String = "claude-3-7-sonnet-20250219",
+            toolManager: ToolManager? = null
+        ): LLMProvider = if (toolManager != null) AnthropicToolsProvider(
+            apiKey,
+            baseUrl,
+            model,
+            toolManager
+        ) else AnthropicProvider(apiKey, baseUrl, model)
 
         /**
          * Create a custom LLM provider.
