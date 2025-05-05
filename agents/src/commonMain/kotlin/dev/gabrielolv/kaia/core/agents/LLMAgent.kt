@@ -27,19 +27,22 @@ class LLMAgentBuilder : AgentBuilder() {
     var provider: LLMProvider? = null
     var systemPrompt: String? = null
     var temperature: Double? = null
+    var recursionLimit: Int? = null
 }
 
 private fun LLMAgentBuilder.buildProcessor(): (LLMMessage.UserMessage, Conversation) -> Flow<AgentResult> {
     val llmProvider = requireNotNull(provider) { "LLMProvider must be set for LLMAgent" }
     val prompt = systemPrompt
     val temp = temperature
+    val recursion = recursionLimit
 
     return { message, conversation ->
         val history = conversation.messages
 
         val options = LLMOptions(
             systemPrompt = prompt,
-            temperature = temp ?: 0.7
+            temperature = temp ?: 0.7,
+            toolRecursionLimit = recursion ?: 10
         )
 
         llmProvider.generate(history + message, options)

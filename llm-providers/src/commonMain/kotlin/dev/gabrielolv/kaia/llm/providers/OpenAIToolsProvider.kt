@@ -213,7 +213,7 @@ class OpenAIToolsProvider(
 
         // --- Tool call loop ---
         var currentApiMessages = apiMessages.toList() // Start with the history
-        val maxIterations = 10
+        val maxIterations = options.toolRecursionLimit
         var iteration = 0
 
         while (iteration < maxIterations) {

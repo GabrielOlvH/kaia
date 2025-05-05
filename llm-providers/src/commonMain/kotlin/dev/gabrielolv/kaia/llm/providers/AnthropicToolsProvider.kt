@@ -246,7 +246,7 @@ class AnthropicToolsProvider(
 
         // --- Tool call loop ---
         var currentMessages = apiMessages.toList()
-        val maxIterations = 10
+        val maxIterations = options.toolRecursionLimit
         var iteration = 0
 
         while (iteration < maxIterations) {
