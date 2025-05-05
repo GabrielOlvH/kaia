@@ -331,36 +331,37 @@ class GeminiToolsProvider(
             }
 
             val responseContent = candidate.content
-            
+
             // Check if there are function calls in the response
             val hasFunctionCalls = responseContent.parts.any { it.functionCall != null }
-            
+
             if (hasFunctionCalls) {
                 // Add the model's message with function calls to our history
                 currentMessages = currentMessages + responseContent
-                
+
                 // Process function calls and get responses
                 val functionResponseContents = processFunctionCalls(responseContent) { message ->
                     send(message) // Emit tool call and response messages
                 }
-                
+
                 // Add function responses to conversation history
                 currentMessages = currentMessages + functionResponseContents
                 iteration++
-            } else {
-                // No function calls, this is the final assistant message
-                val textContent = responseContent.parts.firstOrNull { it.text != null }?.text
-                if (textContent != null) {
-                    val finalAssistantMessage = LLMMessage.AssistantMessage(
-                        content = textContent,
-                        rawResponse = Json.encodeToJsonElement(response)
-                    )
-                    send(finalAssistantMessage)
-                } else {
-                    send(LLMMessage.SystemMessage("Warning: Gemini response contained no text content."))
-                }
-                break // Exit loop
             }
+            // No function calls, this is the final assistant message
+            val textContent = responseContent.parts.firstOrNull { it.text != null }?.text
+            if (textContent != null) {
+                val finalAssistantMessage = LLMMessage.AssistantMessage(
+                    content = textContent,
+                    rawResponse = Json.encodeToJsonElement(response)
+                )
+                send(finalAssistantMessage)
+            } else {
+                send(LLMMessage.SystemMessage("Warning: Gemini response contained no text content."))
+            }
+            if (!hasFunctionCalls)
+                break // Exit loop
+
         }
 
         if (iteration == maxIterations) {
