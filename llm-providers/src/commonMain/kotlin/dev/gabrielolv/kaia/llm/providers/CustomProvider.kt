@@ -4,8 +4,10 @@ import dev.gabrielolv.kaia.llm.LLMMessage
 import dev.gabrielolv.kaia.llm.LLMOptions
 import dev.gabrielolv.kaia.llm.LLMProvider
 import dev.gabrielolv.kaia.llm.LLMResponse
-import dev.gabrielolv.kaia.utils.httpClient
+import dev.gabrielolv.kaia.utils.createHttpEngine
+import io.ktor.client.*
 import io.ktor.client.call.*
+import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.http.*
 import kotlinx.coroutines.flow.Flow
@@ -18,7 +20,12 @@ internal class CustomProvider(
     private val requestTransformer: (List<LLMMessage>, LLMOptions) -> Any,
     private val responseTransformer: (Any) -> LLMResponse
 ) : LLMProvider {
+    val httpClient = HttpClient(createHttpEngine()) {
+        install(ContentNegotiation) {
 
+        }
+        expectSuccess = true
+    }
     override fun generate(
         messages: List<LLMMessage>, // Changed parameter
         options: LLMOptions

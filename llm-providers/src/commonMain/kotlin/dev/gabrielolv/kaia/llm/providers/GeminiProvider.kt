@@ -3,10 +3,13 @@ package dev.gabrielolv.kaia.llm.providers
 import dev.gabrielolv.kaia.llm.LLMMessage
 import dev.gabrielolv.kaia.llm.LLMOptions
 import dev.gabrielolv.kaia.llm.LLMProvider
-import dev.gabrielolv.kaia.utils.httpClient
+import dev.gabrielolv.kaia.utils.createHttpEngine
+import io.ktor.client.*
 import io.ktor.client.call.*
+import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.http.*
+import io.ktor.serialization.kotlinx.json.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -27,6 +30,12 @@ internal class GeminiProvider(
         encodeDefaults = true
         isLenient = true
         namingStrategy = JsonNamingStrategy.SnakeCase
+    }
+    val httpClient = HttpClient(createHttpEngine()) {
+        install(ContentNegotiation) {
+            json(json)
+        }
+        expectSuccess = true
     }
 
     @Serializable

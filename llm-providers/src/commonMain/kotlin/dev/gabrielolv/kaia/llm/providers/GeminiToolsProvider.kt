@@ -4,10 +4,14 @@ import dev.gabrielolv.kaia.core.tools.ToolManager
 import dev.gabrielolv.kaia.llm.LLMMessage
 import dev.gabrielolv.kaia.llm.LLMOptions
 import dev.gabrielolv.kaia.llm.LLMProvider
-import dev.gabrielolv.kaia.utils.httpClient
+import dev.gabrielolv.kaia.utils.createHttpEngine
+import io.ktor.client.*
 import io.ktor.client.call.*
+import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
+import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.serialization.kotlinx.json.*
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -34,7 +38,12 @@ class GeminiToolsProvider(
         explicitNulls = false
         encodeDefaults = true
         isLenient = true
-        namingStrategy = JsonNamingStrategy.SnakeCase
+    }
+    val httpClient = HttpClient(createHttpEngine()) {
+        install(ContentNegotiation) {
+            json(json)
+        }
+        expectSuccess = true
     }
 
     @Serializable
@@ -53,7 +62,7 @@ class GeminiToolsProvider(
     @Serializable
     private data class GeminiFunctionCall(
         val name: String,
-        val args: String
+        val args: JsonElement
     )
 
     @Serializable
@@ -67,8 +76,8 @@ class GeminiToolsProvider(
         val contents: List<GeminiContent>,
         val generationConfig: GeminiGenerationConfig? = null,
         val safetySettings: List<GeminiSafetySetting>? = null,
-        val systemInstruction: GeminiContent? = null,
-        val tools: List<GeminiTool>? = null
+        val tools: List<GeminiTool>? = null,
+        val toolConfig: ToolConfig? = null
     )
 
     @Serializable
@@ -96,6 +105,17 @@ class GeminiToolsProvider(
         val name: String,
         val description: String,
         val parameters: JsonObject
+    )
+
+    @Serializable
+    private data class ToolConfig(
+        val functionCallingConfig: FunctionCallingConfig? = null
+    )
+
+    @Serializable
+    private data class FunctionCallingConfig(
+        val mode: String = "AUTO",
+        val allowedFunctionNames: List<String>? = null
     )
 
     @Serializable
@@ -141,7 +161,7 @@ class GeminiToolsProvider(
                 GeminiPart(
                     functionCall = GeminiFunctionCall(
                         name = name,
-                        args = json.encodeToString(arguments)
+                        args = arguments
                     )
                 )
             )
@@ -166,7 +186,7 @@ class GeminiToolsProvider(
         return httpClient.post("$baseUrl/models/$model:generateContent?key=$apiKey") {
             contentType(ContentType.Application.Json)
             setBody(json.encodeToString(request))
-        }.body()
+        }.also { println(it.bodyAsText()) }.body()
     }
 
     /**
@@ -191,11 +211,11 @@ class GeminiToolsProvider(
                         LLMMessage.ToolCallMessage(
                             toolCallId = toolCallId,
                             name = toolName,
-                            arguments = json.decodeFromString(arguments)
+                            arguments = arguments
                         )
                     )
 
-                    val result = toolManager.executeTool(toolCallId, toolName, json.decodeFromString(arguments))
+                    val result = toolManager.executeTool(toolCallId, toolName, arguments.jsonObject)
 
                     // Emit tool response message
                     val toolResponseMessage = LLMMessage.ToolResponseMessage(
@@ -231,12 +251,29 @@ class GeminiToolsProvider(
         val systemMessage = options.systemPrompt ?: 
             messages.filterIsInstance<LLMMessage.SystemMessage>().lastOrNull()?.content
 
-        // Create system instruction if available
-        val systemInstruction = systemMessage?.let {
-            GeminiContent(
-                role = "system",
-                parts = listOf(GeminiPart(text = it))
-            )
+        // Prepare conversation messages
+        val conversationMessages = messages.filterNot { it is LLMMessage.SystemMessage }
+            .mapNotNull { it.toGeminiContent() }
+            .toMutableList()
+            
+        // Add system message as a user message at the beginning if available
+        if (systemMessage != null) {
+            conversationMessages.add(0, GeminiContent(
+                role = "user",
+                parts = listOf(GeminiPart(text = "System instruction: $systemMessage"))
+            ))
+            
+            // Add a model response acknowledging the system instruction
+            conversationMessages.add(1, GeminiContent(
+                role = "model",
+                parts = listOf(GeminiPart(text = "I'll follow these instructions."))
+            ))
+        }
+
+        // Ensure there's at least one message
+        if (conversationMessages.isEmpty()) {
+            send(LLMMessage.SystemMessage("Error: No valid messages found to send to Gemini API after filtering."))
+            return@channelFlow
         }
 
         // Convert registered tools to Gemini format
@@ -252,16 +289,6 @@ class GeminiToolsProvider(
                     }
                 )
             )
-        }
-
-        // Prepare conversation messages (excluding system messages)
-        val conversationMessages = messages.filterNot { it is LLMMessage.SystemMessage }
-            .mapNotNull { it.toGeminiContent() }
-
-        // Ensure there's at least one message
-        if (conversationMessages.isEmpty()) {
-            send(LLMMessage.SystemMessage("Error: No valid messages found to send to Gemini API after filtering."))
-            return@channelFlow
         }
 
         // Create generation config
@@ -281,8 +308,13 @@ class GeminiToolsProvider(
             val request = GeminiRequest(
                 contents = currentMessages,
                 generationConfig = generationConfig,
-                systemInstruction = systemInstruction,
-                tools = tools
+                tools = tools,
+                toolConfig = ToolConfig(
+                    functionCallingConfig = FunctionCallingConfig(
+                        mode = "ANY",
+                        allowedFunctionNames = toolManager.getAllTools().map { it.name }
+                    )
+                )
             )
 
             val response: GeminiResponse = try {

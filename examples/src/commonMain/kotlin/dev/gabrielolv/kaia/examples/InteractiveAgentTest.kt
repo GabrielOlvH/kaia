@@ -165,25 +165,11 @@ fun main2() = runBlocking {
     // Example using Gemini
     val geminiProvider = LLMProvider.gemini(
         apiKey = geminiApiKey,
-        // Optional parameters:
-        // baseUrl = "https://generativelanguage.googleapis.com",
-        // model = "gemini-2.5-pro-latest" (default)
-        // Other available models:
-        // - "gemini-2.5-flash-latest" (faster, cost-effective)
-        // - "gemini-1.5-pro" (stable, large context window)
-        // - "gemini-1.5-flash" (stable, faster)
     )
 
     // Example using Anthropic
     val anthropicProvider = LLMProvider.anthropic(
         apiKey = anthropicApiKey,
-        // Optional parameters:
-        // baseUrl = "https://api.anthropic.com/v1",
-        // model = "claude-3-7-sonnet-20250219" (default)
-        // Other available models:
-        // - "claude-3-5-sonnet-20241022" (previous generation)
-        // - "claude-3-5-haiku-20241022" (fastest model)
-        // - "claude-3-haiku-20240307" (compact, responsive)
     )
 
     // Create a conversation with messages
