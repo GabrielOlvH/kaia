@@ -5,14 +5,7 @@ plugins {
 
 kotlin {
     // Define the targets matching :core
-    jvm {
-        compilations.all {
-            kotlinOptions.jvmTarget = "1.8"
-        }
-        testRuns["test"].executionTask.configure {
-            useJUnitPlatform()
-        }
-    }
+    jvm()
     linuxX64()
     mingwX64()
 
