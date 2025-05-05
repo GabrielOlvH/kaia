@@ -300,7 +300,7 @@ class GeminiToolsProvider(
 
         // --- Tool call loop ---
         var currentMessages = conversationMessages.toList()
-        val maxIterations = 10
+        val maxIterations = options.toolRecursionLimit
         var iteration = 0
 
         while (iteration < maxIterations) {
