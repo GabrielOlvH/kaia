@@ -311,8 +311,7 @@ class GeminiToolsProvider(
                 tools = tools,
                 toolConfig = ToolConfig(
                     functionCallingConfig = FunctionCallingConfig(
-                        mode = "ANY",
-                        allowedFunctionNames = toolManager.getAllTools().map { it.name }
+                        mode = "AUTO"
                     )
                 )
             )
