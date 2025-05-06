@@ -9,6 +9,7 @@ import dev.gabrielolv.kaia.llm.LLMMessage
 import dev.gabrielolv.kaia.llm.LLMProvider
 import kotlinx.coroutines.runBlocking
 
+
 fun KAIAgentSystemBuilder.createGreetingAgent(provider: LLMProvider): Agent {
     return buildLLMAgent {
         id = "greeting-agent"
