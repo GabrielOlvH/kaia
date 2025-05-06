@@ -9,11 +9,6 @@ import dev.gabrielolv.kaia.llm.LLMMessage
 import dev.gabrielolv.kaia.llm.LLMProvider
 import kotlinx.coroutines.runBlocking
 
-// Platform-specific `actual fun getEnv(name: String): String?` must be provided
-// (e.g., in src/jvmMain/kotlin)
-
-// --- Agent Definitions ---
-
 fun KAIAgentSystemBuilder.createGreetingAgent(provider: LLMProvider): Agent {
     return buildLLMAgent {
         id = "greeting-agent"
