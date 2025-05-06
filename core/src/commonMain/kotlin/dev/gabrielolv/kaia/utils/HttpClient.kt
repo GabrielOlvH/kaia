@@ -1,5 +1,5 @@
 package dev.gabrielolv.kaia.utils
 
-import io.ktor.client.*
+import io.ktor.client.engine.*
 
-expect val httpClient: HttpClient
+expect fun createHttpEngine():  HttpClientEngineFactory<*>
