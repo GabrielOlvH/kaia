@@ -12,5 +12,7 @@ data class LLMOptions(
     val systemPrompt: String? = null,
     val additionalParameters: Map<String, JsonElement> = emptyMap(),
     val responseFormat: String = "text",
-    val historySize: Int? = 10
+    val historySize: Int? = 10,
+    /** Maximum number of recursive tool call iterations */
+    val toolRecursionLimit: Int = 10
 )

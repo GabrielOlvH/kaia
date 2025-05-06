@@ -6,6 +6,7 @@ import dev.gabrielolv.kaia.core.agents.Agent
 import dev.gabrielolv.kaia.core.agents.buildDirectorAgent
 import dev.gabrielolv.kaia.core.agents.buildLLMAgent
 import dev.gabrielolv.kaia.llm.LLMMessage
+import dev.gabrielolv.kaia.llm.LLMOptions
 import dev.gabrielolv.kaia.llm.LLMProvider
 import kotlinx.coroutines.runBlocking
 
@@ -61,6 +62,7 @@ fun KAIAgentSystemBuilder.createFallbackAgent(provider: LLMProvider): Agent {
 // --- Main Test Execution ---
 
 fun main() = runBlocking {
+    main2()
     val apiKey = getEnv("OPENAI_API_KEY")
     if (apiKey.isNullOrBlank()) {
         println("Error: OPENAI_API_KEY environment variable not set.")
@@ -153,3 +155,53 @@ fun main() = runBlocking {
 }
 
 expect fun getEnv(name: String): String?
+
+
+fun main2() = runBlocking {
+    // Replace with your actual API keys
+    val geminiApiKey =  getEnv("GEMINI_API_KEY")!!
+    val anthropicApiKey = getEnv("ANTHROPIC_API_KEY")!!
+
+    // Example using Gemini
+    val geminiProvider = LLMProvider.gemini(
+        apiKey = geminiApiKey,
+    )
+
+    // Example using Anthropic
+    val anthropicProvider = LLMProvider.anthropic(
+        apiKey = anthropicApiKey,
+    )
+
+    // Create a conversation with messages
+    val messages = listOf(
+        LLMMessage.UserMessage("Hello, can you tell me about yourself?")
+    )
+
+    // Options for the LLM request
+    val options = LLMOptions(
+        systemPrompt = "You are a helpful AI assistant.",
+        temperature = 0.7,
+        // maxTokens = 8192, // Adjust based on model capabilities
+        // stopSequences = listOf("STOP") // Optional stop sequences
+    )
+
+    // Generate responses using Gemini
+    println("Gemini response:")
+    geminiProvider.generate(messages, options).collect { message ->
+        when (message) {
+            is LLMMessage.AssistantMessage -> println(message.content)
+            is LLMMessage.SystemMessage -> println("System: ${message.content}")
+            else -> println("Received message of type: ${message::class.simpleName}")
+        }
+    }
+
+    // Generate responses using Anthropic
+    println("\nAnthropic response:")
+    anthropicProvider.generate(messages, options).collect { message ->
+        when (message) {
+            is LLMMessage.AssistantMessage -> println(message.content)
+            is LLMMessage.SystemMessage -> println("System: ${message.content}")
+            else -> println("Received message of type: ${message::class.simpleName}")
+        }
+    }
+}
