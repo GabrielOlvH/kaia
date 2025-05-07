@@ -4,6 +4,7 @@ import dev.gabrielolv.kaia.core.Conversation
 import dev.gabrielolv.kaia.core.database.SqlExecutor
 import dev.gabrielolv.kaia.core.database.SqlResult
 import dev.gabrielolv.kaia.core.model.*
+import dev.gabrielolv.kaia.core.tenant.tenantContext
 import dev.gabrielolv.kaia.llm.LLMMessage
 import dev.gabrielolv.kaia.llm.LLMOptions
 import dev.gabrielolv.kaia.llm.LLMProvider
@@ -15,7 +16,6 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.isActive
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNamingStrategy
@@ -147,7 +147,6 @@ class DatabaseAgentBuilder : AgentBuilder() {
                 }
 
                 if (sqlToExecute == null) {
-                    if (!currentCoroutineContext().isActive) return@flow
                     emit(ErrorResult(error = null, "Could not determine SQL to execute after parsing LLM response."))
                     return@flow
                 }
@@ -156,7 +155,14 @@ class DatabaseAgentBuilder : AgentBuilder() {
                     val finalSql = sqlToExecute.sqlTemplate
                     emit(SystemResult("Executing SQL: `$finalSql` with params: ${sqlToExecute.parameters.joinToString { it.value.toString()  }}"))
 
-                    val result = executor.execute(sqlToExecute)
+                    val tenantContext = currentCoroutineContext().tenantContext()
+
+                    if (tenantContext == null) {
+                        emit(ErrorResult(null, "Tenant context is null. Cannot execute SQL."))
+                        return@flow
+                    }
+
+                    val result = executor.execute(tenantContext, sqlToExecute)
 
                     when (result) {
                         is SqlResult.Success -> {
