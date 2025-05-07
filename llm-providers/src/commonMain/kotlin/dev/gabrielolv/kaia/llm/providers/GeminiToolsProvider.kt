@@ -220,7 +220,7 @@ class GeminiToolsProvider(
                     // Emit tool response message
                     val toolResponseMessage = LLMMessage.ToolResponseMessage(
                         toolCallId = toolCallId,
-                        content = result.result
+                        content =  result.fold({err -> err.toString()}, { result -> result.result})
                     )
                     emitMessage(toolResponseMessage)
 
@@ -231,7 +231,7 @@ class GeminiToolsProvider(
                             GeminiPart(
                                 functionResponse = GeminiFunctionResponse(
                                     name = toolName,
-                                    response = JsonObject(mapOf("result" to JsonPrimitive(result.result)))
+                                    response = JsonObject(mapOf("result" to JsonPrimitive( result.fold({err -> err.toString()}, { result -> result.result}))))
                                 )
                             )
                         )

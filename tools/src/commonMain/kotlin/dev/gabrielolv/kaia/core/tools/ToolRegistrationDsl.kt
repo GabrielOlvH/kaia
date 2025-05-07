@@ -1,5 +1,7 @@
 package dev.gabrielolv.kaia.core.tools
 
+import arrow.core.Either
+import dev.gabrielolv.kaia.core.tenant.TenantContext
 import dev.gabrielolv.kaia.core.tools.typed.ToolParameters
 import dev.gabrielolv.kaia.core.tools.typed.ToolParametersInstance
 import dev.gabrielolv.kaia.core.tools.typed.TypedTool
@@ -42,12 +44,15 @@ class ToolRegistrationScope(private val toolManager: ToolManager) {
         name: String,
         description: String,
         paramsClass: KClass<T>,
-        executor: suspend (parameters: ToolParametersInstance) -> ToolResult
+        executor: suspend (toolCallId: String, parameters: ToolParametersInstance, tenantContext: TenantContext) -> Either<ToolError, ToolResult>
     ) {
         val tool = object : TypedTool<T>(name, description, paramsClass) {
-            override suspend fun executeTyped(parameters: ToolParametersInstance): ToolResult {
-                // Input parameters are already parsed and validated by TypedTool base class
-                return executor(parameters)
+            override suspend fun executeTyped(
+                toolCallId: String,
+                parameters: ToolParametersInstance,
+                tenantContext: TenantContext
+            ): Either<ToolError, ToolResult> {
+                return executor(toolCallId, parameters, tenantContext)
             }
         }
         toolManager.registerTool(tool)
@@ -74,7 +79,7 @@ class ToolRegistrationScope(private val toolManager: ToolManager) {
     inline fun <reified T : ToolParameters> typedTool(
         name: String,
         description: String,
-        noinline executor: suspend (parameters: ToolParametersInstance) -> ToolResult
+        noinline executor: suspend (toolCallId: String, parameters: ToolParametersInstance, tenantContext: TenantContext) -> Either<ToolError, ToolResult>
     ) {
         // Call the other typedTool function, passing T::class automatically
         typedTool(name, description, T::class, executor)

@@ -165,14 +165,14 @@ class OpenAIToolsProvider(
                 // Emit tool response message
                 val toolResponseMessage = LLMMessage.ToolResponseMessage(
                     toolCallId = toolCall.id,
-                    content = result.result
+                    content =  result.fold({err -> err.toString()}, { result -> result.result})
                 )
                 emitMessage(toolResponseMessage)
 
                 // Return the message for the API
                 Message(
                     role = "tool",
-                    content = result.result,
+                    content =  result.fold({err -> err.toString()}, { result -> result.result}),
                     toolCallId = toolCall.id
                 )
             }

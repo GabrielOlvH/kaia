@@ -1,6 +1,8 @@
 package dev.gabrielolv.kaia.core
 
 import dev.gabrielolv.kaia.core.model.*
+import dev.gabrielolv.kaia.core.tenant.TenantContext
+import dev.gabrielolv.kaia.core.tenant.withTenantContext
 import dev.gabrielolv.kaia.core.tools.ToolExecutionFailedException
 import dev.gabrielolv.kaia.core.tools.ToolManager
 import dev.gabrielolv.kaia.llm.LLMMessage
@@ -10,6 +12,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -54,6 +57,7 @@ class HandoffManager(
         conversationId: String,
         message: LLMMessage.UserMessage,
         directorAgentId: String, // ID of the agent created by withDirectorAgent
+        tenantContext: TenantContext,
     ): Flow<LLMMessage>? {
         val conversation = lock.withLock { conversations[conversationId] }
             ?: return null // Or throw exception
@@ -64,31 +68,33 @@ class HandoffManager(
         }
 
         return channelFlow {
-            val userMessage = LLMMessage.UserMessage(content = message.content)
-            conversation.append(userMessage)
+            withTenantContext(tenantContext) {
+                val userMessage = LLMMessage.UserMessage(content = message.content)
+                conversation.append(userMessage)
 
 
-            try {
-                manageStepByStepExecution(
-                    conversation,
-                    directorAgentId,
-                    message,
-                    this
-                )
-            } catch (e: Exception) {
-                val errorMsg = LLMMessage.SystemMessage(
-                    content = "Step-by-step execution failed: ${e.message}"
-                )
-                send(errorMsg)
-                conversation.append(errorMsg)
-            } finally {
-                val lastExecuted = conversation.executedSteps.lastOrNull()
-                if (lastExecuted?.status == StepStatus.COMPLETED && conversation.executedSteps.size > 0) {
-                    send(LLMMessage.SystemMessage("Processing complete."))
-                } else if (conversation.executedSteps.any { it.status == StepStatus.FAILED }) {
-                    send(LLMMessage.SystemMessage("Processing finished with errors."))
-                } else if (conversation.executedSteps.size >= maxSteps) {
-                    send(LLMMessage.SystemMessage("Processing stopped: Maximum step limit reached."))
+                try {
+                    manageStepByStepExecution(
+                        conversation,
+                        directorAgentId,
+                        message,
+                        this@channelFlow
+                    )
+                } catch (e: Exception) {
+                    val errorMsg = LLMMessage.SystemMessage(
+                        content = "Step-by-step execution failed: ${e.message}"
+                    )
+                    send(errorMsg)
+                    conversation.append(errorMsg)
+                } finally {
+                    val lastExecuted = conversation.executedSteps.lastOrNull()
+                    if (lastExecuted?.status == StepStatus.COMPLETED && conversation.executedSteps.size > 0) {
+                        send(LLMMessage.SystemMessage("Processing complete."))
+                    } else if (conversation.executedSteps.any { it.status == StepStatus.FAILED }) {
+                        send(LLMMessage.SystemMessage("Processing finished with errors."))
+                    } else if (conversation.executedSteps.size >= maxSteps) {
+                        send(LLMMessage.SystemMessage("Processing stopped: Maximum step limit reached."))
+                    }
                 }
             }
         }
@@ -267,27 +273,26 @@ class HandoffManager(
                                     executedStepRecord.messages.add(toolMsg) // Log to step
 
                                     try {
-                                        val toolResult =
-                                            toolManager.executeToolFromJson(toolCall.id, toolCall.name, toolCall.arguments)
-                                        val resultMsgContent = "Tool Result (${toolCall.name}): ${toolResult.result}"
-                                        val toolResponseMsg = LLMMessage.SystemMessage(resultMsgContent)
-                                        emitAndStore(toolResponseMsg) // Send result back
-                                        executedStepRecord.messages.add(toolResponseMsg) // Log result
+                                        toolManager.executeToolFromJson(toolCall.id, toolCall.name, toolCall.arguments)
+                                            .onRight { toolResult ->
+                                                val resultMsgContent = "Tool Result (${toolCall.name}): ${toolResult.result}"
+                                                val toolResponseMsg = LLMMessage.SystemMessage(resultMsgContent)
+                                                emitAndStore(toolResponseMsg) // Send result back
+                                                executedStepRecord.messages.add(toolResponseMsg) // Log result
 
-                                        // Store the ToolResponseResult in the main conversation history
-                                        // so the next Director iteration can see it.
-                                        conversation.append(
-                                            LLMMessage.ToolResponseMessage(
-                                                toolCall.id,
-                                                toolResult.result
-                                            )
-                                        )
+                                                conversation.append(
+                                                    LLMMessage.ToolResponseMessage(
+                                                        toolCall.id,
+                                                        toolResult.result
+                                                    )
+                                                )
+                                            }.onLeft { error ->
+                                                emitAndStore(LLMMessage.SystemMessage("Tool execution failed for ${toolCall.name}: $error"))
+                                                executedStepRecord.error = "Tool failed: ${error}"
+                                                stepFailed = true // Mark step as failed if tool fails
+                                            }
 
-                                        if (!toolResult.success) {
-                                            emitAndStore(LLMMessage.SystemMessage("Tool execution failed for ${toolCall.name}."))
-                                            executedStepRecord.error = "Tool failed: ${toolResult.result}"
-                                            stepFailed = true // Mark step as failed if tool fails
-                                        }
+
                                     } catch (toolEx: ToolExecutionFailedException) {
                                         val toolErrorMsg =
                                             LLMMessage.SystemMessage("Tool execution exception for ${toolCall.name}: ${toolEx.message}")

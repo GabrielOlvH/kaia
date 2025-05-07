@@ -2,7 +2,6 @@ plugins {
 
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.kotlin.plugin.serialization)
-    // id("app.cash.sqldelight") version "2.0.1" // Commented out until DB is configured
 }
 
 kotlin {
