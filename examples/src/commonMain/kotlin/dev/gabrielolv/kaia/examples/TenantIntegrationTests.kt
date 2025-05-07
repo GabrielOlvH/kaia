@@ -1,45 +1,27 @@
 package dev.gabrielolv.kaia.examples
 
-import dev.gabrielolv.kaia.core.agents.Agent
-import dev.gabrielolv.kaia.core.model.AgentResult
-import dev.gabrielolv.kaia.core.model.ToolCallResult
-import dev.gabrielolv.kaia.core.model.ToolCall
-import dev.gabrielolv.kaia.core.model.StructuredResult
-import dev.gabrielolv.kaia.core.model.DirectorOutput
-import dev.gabrielolv.kaia.core.model.NextStep
-import dev.gabrielolv.kaia.core.model.TextResult
-import dev.gabrielolv.kaia.core.tenant.*
-import dev.gabrielolv.kaia.core.tools.ToolResult
-import dev.gabrielolv.kaia.core.tools.ToolError
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonObject
 import arrow.core.Either
 import dev.gabrielolv.kaia.core.Conversation
 import dev.gabrielolv.kaia.core.KAIAgentSystem
-import dev.gabrielolv.kaia.core.KAIAgentSystemBuilder
-import dev.gabrielolv.kaia.core.RunResult
+import dev.gabrielolv.kaia.core.agents.Agent
+import dev.gabrielolv.kaia.core.agents.director
+import dev.gabrielolv.kaia.core.model.*
+import dev.gabrielolv.kaia.core.tenant.*
+import dev.gabrielolv.kaia.core.tools.ToolCall
+import dev.gabrielolv.kaia.core.tools.ToolError
+import dev.gabrielolv.kaia.core.tools.ToolResult
 import dev.gabrielolv.kaia.core.tools.typed.ToolParameters
 import dev.gabrielolv.kaia.core.tools.typed.ToolParametersInstance
 import dev.gabrielolv.kaia.core.tools.typed.TypedTool
 import dev.gabrielolv.kaia.llm.LLMMessage
-import dev.gabrielolv.kaia.utils.nextToolCallsId
-import kotlinx.coroutines.flow.Flow
-import kotlinx.serialization.json.put
-import kotlin.text.get
-import kotlinx.coroutines.runBlocking
-import dev.gabrielolv.kaia.core.agents.director
-import dev.gabrielolv.kaia.llm.LLMProvider
 import dev.gabrielolv.kaia.llm.LLMOptions
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
+import dev.gabrielolv.kaia.llm.LLMProvider
+import dev.gabrielolv.kaia.utils.nextToolCallsId
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.serialization.json.*
 
 // Test Tenant Manager
 class TestTenantManager : TenantManager {
@@ -168,13 +150,13 @@ class MockDirectorLLMProvider : LLMProvider {
                 nextStep = NextStep(agentId = "test-tool-agent-EchoTool", action = payload, reason = "Routing to EchoTool agent"),
                 isComplete = !isFirstDirectorCall,
                 waitForUserInput = false,
-                overallReason = "User requested echo"
+                reasoningTrace = "User requested echo"
             )
             "restricted" -> DirectorOutput(
                 nextStep = NextStep(agentId = "test-tool-agent-TenantRestrictedTool", action = payload, reason = "Routing to TenantRestrictedTool agent"),
                 isComplete = !isFirstDirectorCall,
                 waitForUserInput = false,
-                overallReason = "User requested restricted tool access"
+                reasoningTrace = "User requested restricted tool access"
             )
             "succeed" -> DirectorOutput( // Command for FailingTool to succeed
                 // Payload should be a JSON string like {"message": "success test"}
@@ -188,7 +170,7 @@ class MockDirectorLLMProvider : LLMProvider {
                 ),
                 isComplete = !isFirstDirectorCall,
                 waitForUserInput = false,
-                overallReason = "User requested FailingTool to succeed"
+                reasoningTrace = "User requested FailingTool to succeed"
             )
             "fail" -> DirectorOutput( // Command for FailingTool to fail
                 // Payload should be a JSON string like {"message": "failure test"}
@@ -202,7 +184,7 @@ class MockDirectorLLMProvider : LLMProvider {
                 ),
                 isComplete = !isFirstDirectorCall,
                 waitForUserInput = false,
-                overallReason = "User requested FailingTool to fail"
+                reasoningTrace = "User requested FailingTool to fail"
             )
             "nonexistent" -> DirectorOutput( // Command for NonExistentTool
                 nextStep = NextStep(
@@ -212,13 +194,13 @@ class MockDirectorLLMProvider : LLMProvider {
                 ),
                 isComplete = !isFirstDirectorCall,
                 waitForUserInput = false,
-                overallReason = "User requested a non-existent tool"
+                reasoningTrace = "User requested a non-existent tool"
             )
             else -> DirectorOutput(
                 nextStep = NextStep(agentId = "fallback-agent", action = "Unknown command: $command", reason = "Command not recognized"),
                 isComplete = true,
                 waitForUserInput = false,
-                overallReason = "Unknown command received"
+                reasoningTrace = "Unknown command received"
             )
         }
         val jsonResponse = json.encodeToString(directorOutput)

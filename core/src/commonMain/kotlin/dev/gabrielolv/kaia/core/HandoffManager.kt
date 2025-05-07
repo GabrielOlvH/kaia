@@ -12,7 +12,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -179,7 +178,7 @@ class HandoffManager(
                 break
             }
 
-            emitAndStore(LLMMessage.SystemMessage("Director decision: ${directorOutput!!.overallReason}"))
+            emitAndStore(LLMMessage.SystemMessage("Director decision: ${directorOutput!!.reasoningTrace}"))
 
             if (directorOutput!!.isComplete) {
                 emitAndStore(LLMMessage.SystemMessage("Director indicates task is complete."))
