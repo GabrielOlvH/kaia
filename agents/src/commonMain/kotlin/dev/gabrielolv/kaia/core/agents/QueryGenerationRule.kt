@@ -1,4 +1,4 @@
-package dev.gabrielolv.kaia.utils
+package dev.gabrielolv.kaia.core.agents
 
 /**
  * Defines the rules for how the DatabaseAgent should generate or select SQL queries.
@@ -16,4 +16,4 @@ enum class QueryGenerationRule {
      * The agent expects a `GeneratedSql` JSON object.
      */
     ALLOW_CUSTOM_SQL,
-} 
+}

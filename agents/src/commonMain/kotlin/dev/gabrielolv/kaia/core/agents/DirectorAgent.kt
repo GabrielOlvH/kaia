@@ -135,7 +135,7 @@ class DirectorAgentBuilder : AgentBuilder() {
 
         return { message, conversation ->
             flow {
-                val originalRequest = conversation.originalUserRequest
+                val originalRequest = message.content
 
                 // Filter history for the prompt, excluding tool messages
                 val promptHistory = conversation.messages

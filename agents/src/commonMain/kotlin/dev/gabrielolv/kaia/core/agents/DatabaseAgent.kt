@@ -11,7 +11,6 @@ import dev.gabrielolv.kaia.llm.LLMProvider
 import dev.gabrielolv.kaia.utils.GeneratedSql
 import dev.gabrielolv.kaia.utils.PreDefinedQuery
 import dev.gabrielolv.kaia.utils.PreDefinedQuerySelection
-import dev.gabrielolv.kaia.utils.QueryGenerationRule
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
