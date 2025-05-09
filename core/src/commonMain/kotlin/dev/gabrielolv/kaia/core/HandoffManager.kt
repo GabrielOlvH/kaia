@@ -3,7 +3,6 @@ package dev.gabrielolv.kaia.core
 import dev.gabrielolv.kaia.core.model.*
 import dev.gabrielolv.kaia.core.tenant.TenantContext
 import dev.gabrielolv.kaia.core.tenant.withTenantContext
-import dev.gabrielolv.kaia.core.tools.ToolExecutionFailedException
 import dev.gabrielolv.kaia.core.tools.ToolManager
 import dev.gabrielolv.kaia.llm.LLMMessage
 import dev.gabrielolv.kaia.utils.nextThreadId
@@ -12,7 +11,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -20,7 +18,7 @@ import kotlinx.serialization.json.Json
 data class AgentTaskContext(
     val originalUserRequest: String,
     val currentTask: String,
-    val reasonForTask: String? // Added: Context from Director
+    val reasonForTask: String?
 )
 
 class HandoffManager(
@@ -35,13 +33,9 @@ class HandoffManager(
      * Start a new conversation. The initial agent is now the planner.
      */
     suspend fun startConversation(
-        conversationId: String = nextThreadId,
-        initialMessageContent: String
+        conversationId: String = nextThreadId
     ): String {
-        val conversation = Conversation(
-            id = conversationId,
-            originalUserRequest = initialMessageContent
-        )
+        val conversation = Conversation(id = conversationId)
         lock.withLock { conversations[conversationId] = conversation }
         return conversationId
     }
@@ -62,11 +56,6 @@ class HandoffManager(
         val conversation = lock.withLock { conversations[conversationId] }
             ?: return null // Or throw exception
 
-        // Ensure original request is set if this is the very first user message
-        if (conversation.messages.none { it is LLMMessage.UserMessage }) {
-            conversation.originalUserRequest = message.content
-        }
-
         return channelFlow {
             withTenantContext(tenantContext) {
                 val userMessage = LLMMessage.UserMessage(content = message.content)
@@ -76,6 +65,7 @@ class HandoffManager(
                 try {
                     manageStepByStepExecution(
                         conversation,
+                         message,
                         directorAgentId,
                         message,
                         this@channelFlow
@@ -88,7 +78,7 @@ class HandoffManager(
                     conversation.append(errorMsg)
                 } finally {
                     val lastExecuted = conversation.executedSteps.lastOrNull()
-                    if (lastExecuted?.status == StepStatus.COMPLETED && conversation.executedSteps.size > 0) {
+                    if (lastExecuted?.status == StepStatus.COMPLETED && conversation.executedSteps.isNotEmpty()) {
                         send(LLMMessage.SystemMessage("Processing complete."))
                     } else if (conversation.executedSteps.any { it.status == StepStatus.FAILED }) {
                         send(LLMMessage.SystemMessage("Processing finished with errors."))
@@ -103,6 +93,7 @@ class HandoffManager(
 
     private suspend fun manageStepByStepExecution(
         conversation: Conversation,
+        message: LLMMessage.UserMessage,
         directorAgentId: String,
         triggerMessage: LLMMessage.UserMessage,
         scope: ProducerScope<LLMMessage>
@@ -179,14 +170,14 @@ class HandoffManager(
                 break
             }
 
-            emitAndStore(LLMMessage.SystemMessage("Director decision: ${directorOutput!!.overallReason}"))
+            emitAndStore(LLMMessage.SystemMessage("Director decision: ${directorOutput.reasoningTrace}"))
 
-            if (directorOutput!!.isComplete) {
+            if (directorOutput.isComplete) {
                 emitAndStore(LLMMessage.SystemMessage("Director indicates task is complete."))
                 break
             }
 
-            val nextStepInfo = directorOutput!!.nextStep
+            val nextStepInfo = directorOutput.nextStep
             if (nextStepInfo == null) {
                 emitAndStore(LLMMessage.SystemMessage("Director indicates task is not complete, but provided no next step. Halting."))
                 break
@@ -225,7 +216,7 @@ class HandoffManager(
             try {
                 // Prepare context for the agent (similar to before)
                 val agentContext = AgentTaskContext(
-                    originalUserRequest = conversation.originalUserRequest,
+                    originalUserRequest = message.content,
                     currentTask = nextStepInfo.action,
                     reasonForTask = nextStepInfo.reason
                 )
@@ -287,25 +278,23 @@ class HandoffManager(
                                                     )
                                                 )
                                             }.onLeft { error ->
-                                                emitAndStore(LLMMessage.SystemMessage("Tool execution failed for ${toolCall.name}: $error"))
-                                                executedStepRecord.error = "Tool failed: ${error}"
+                                                val toolErrorMsg =
+                                                    LLMMessage.SystemMessage("Tool execution failed for ${toolCall.name}: $error")
+                                                emitAndStore(toolErrorMsg)
+                                                executedStepRecord.messages.add(toolErrorMsg)
+                                                executedStepRecord.error = "Tool exception: $error"
+
+                                                executedStepRecord.error = "Tool failed: $error"
+                                                conversation.append(
+                                                    LLMMessage.ToolResponseMessage(
+                                                        toolCall.id,
+                                                        "Execution Error: $error"
+                                                    )
+                                                )
                                                 stepFailed = true // Mark step as failed if tool fails
                                             }
 
 
-                                    } catch (toolEx: ToolExecutionFailedException) {
-                                        val toolErrorMsg =
-                                            LLMMessage.SystemMessage("Tool execution exception for ${toolCall.name}: ${toolEx.message}")
-                                        emitAndStore(toolErrorMsg)
-                                        executedStepRecord.messages.add(toolErrorMsg)
-                                        executedStepRecord.error = "Tool exception: ${toolEx.message}"
-                                        conversation.append(
-                                            LLMMessage.ToolResponseMessage(
-                                                toolCall.id,
-                                                "Execution Error: ${toolEx.message}"
-                                            )
-                                        )
-                                        stepFailed = true
                                     } catch (e: Exception) {
                                         val toolErrorMsg =
                                             LLMMessage.SystemMessage("Unexpected error during tool execution for ${toolCall.name}: ${e.message}")

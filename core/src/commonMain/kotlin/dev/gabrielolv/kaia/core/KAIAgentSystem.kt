@@ -3,16 +3,13 @@ package dev.gabrielolv.kaia.core
 import arrow.core.Either
 import dev.gabrielolv.kaia.core.agents.Agent
 import dev.gabrielolv.kaia.core.tenant.SingleTenantManager
+import dev.gabrielolv.kaia.core.tenant.TenantContext
+import dev.gabrielolv.kaia.core.tenant.TenantManager
+import dev.gabrielolv.kaia.core.tenant.withTenantContext
 import dev.gabrielolv.kaia.core.tools.Tool
 import dev.gabrielolv.kaia.core.tools.ToolManager
 import dev.gabrielolv.kaia.llm.LLMMessage
 import kotlinx.coroutines.flow.Flow
-import dev.gabrielolv.kaia.core.tenant.Tenant
-import dev.gabrielolv.kaia.core.tenant.TenantContext
-import dev.gabrielolv.kaia.core.tenant.TenantManager
-import dev.gabrielolv.kaia.core.tenant.TenantPermission
-import dev.gabrielolv.kaia.core.tenant.TenantSettings
-import dev.gabrielolv.kaia.core.tenant.withTenantContext
 
 
 sealed interface SystemError {
@@ -121,7 +118,7 @@ class KAIAgentSystem internal constructor(
         )
 
         return withTenantContext(tenantContext) {
-            val conversationId = handoffManager.startConversation(initialMessageContent = initialInput)
+            val conversationId = handoffManager.startConversation()
             val initialMessage = LLMMessage.UserMessage(initialInput)
             val flow = handoffManager.sendMessage(conversationId, initialMessage, directorAgentId, tenantContext)
                 ?: return@withTenantContext Either.Left(SystemError.ConversationOperationFailed("Failed to send message for newly created conversation $conversationId"))

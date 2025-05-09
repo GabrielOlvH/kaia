@@ -37,10 +37,10 @@ class DirectorAgentBuilder : AgentBuilder() {
     var provider: LLMProvider? = null
     var agentDatabase: Map<String, String>? = null
     var fallbackAgent: Agent? = null
-    var taskGoal: String? = null // Added: Overall goal
-    var constraints: List<String>? = null // Added: List of constraints
-    var useCaseSpecificInstructions: List<String>? = null // Added: Specific instructions
-    var useCaseExamples: List<DirectorExample>? = null // Added: Structured examples
+    var taskGoal: String? = null
+    var constraints: List<String>? = null
+    var useCaseSpecificInstructions: List<String>? = null
+    var useCaseExamples: List<DirectorExample>? = null
 
     // Configure JSON parser
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
@@ -61,44 +61,73 @@ class DirectorAgentBuilder : AgentBuilder() {
 
         // --- Prompt Construction --- Start
         val goalSection = taskGoal?.let { "\n\nOverall Task Goal: $it" } ?: ""
-        val constraintsSection = constraints?.takeIf { it.isNotEmpty() }?.joinToString("\n  - ", prefix = "\n\nConstraints:\n  - ") ?: ""
-        val specificInstructionsSection = useCaseSpecificInstructions?.takeIf { it.isNotEmpty() }?.joinToString("\n  - ", prefix = "\n\nSpecific Instructions:\n  - ") ?: ""
+        val constraintsSection =
+            constraints?.takeIf { it.isNotEmpty() }?.joinToString("\n  - ", prefix = "\n\nConstraints:\n  - ") ?: ""
+        val specificInstructionsSection = useCaseSpecificInstructions?.takeIf { it.isNotEmpty() }
+            ?.joinToString("\n  - ", prefix = "\n\nSpecific Instructions:\n  - ") ?: ""
 
-        val examplesSection = useCaseExamples?.takeIf { it.isNotEmpty() }?.joinToString("\n\n---\n") { example ->
-            "Example: ${example.description}\nInput Context:\n  Original Request: ${example.originalRequest}\n  Executed Steps: ${example.executedSteps}\nExpected JSON Output:\n${example.expectedOutputJson}"
-        }?.let { "\n\nExamples:\n$it" } ?: ""
+        val examplesSection = useCaseExamples?.takeIf { it.isNotEmpty() }?.joinToString(
+            "\n\n---\n\n"
+        ) { example ->
+            """
+                Example: ${example.description}
+                Input Context:
+                Original Request: ${example.originalRequest}
+                Executed Steps (including their outcomes/results): ${example.executedSteps}
+                Expected JSON Output:
+                ${example.expectedOutputJson}
+                """
+        }?.let {
+            """
+                Example Scenarios (Study these to understand the reasoning process):
+                $it
+                """
+        } ?: ""
 
         val directorPrompt = """
-    You are a sophisticated AI orchestrator acting as a step-by-step director.
-    Your primary task is to analyze the user's original request and the *results* of previously executed steps to determine the single best *next* action, or if the request is complete, OR if you need clarification from the user.
+    You are a highly intelligent AI orchestrator, the "Step-by-Step Director."
+    Your primary responsibility is to meticulously analyze the user's original request and the full history of *executed steps and their results*. Based on this analysis, you must determine the single most logical *next* action, identify if the request has been fully completed, OR determine if clarification from the user is essential to proceed.
     $goalSection$constraintsSection$specificInstructionsSection
 
-    Available specialized agents:
+    Available Specialized Agents (select the most appropriate one for the next concrete step):
     $agentCatalog
-    Default Agent ID for general tasks: ${fallbackAgent.id}
+    Fallback Agent for general tasks or when no specialized agent is suitable: ${fallbackAgent.id} (ID: ${fallbackAgent.id})
 
     Current Conversation Context:
     Original User Request: {{original_request}}
-    Previously Executed Steps (including agent output/results):
+    Previously Executed Steps (this includes the specific actions taken, the agent that performed them, and the observable results or outputs from those actions):
     {{executed_steps}}
 
-    Based on the original request and the executed steps:
-    1. Evaluate if the original request is fully addressed by the results of the executed steps. If yes, set "isComplete": true.
-    2. Evaluate if you have enough information to proceed with the *next logical step*.
-       - If yes, determine the single best agent and action for that step. Set "isComplete": false, "waitForUserInput": false.
-    3. Evaluate if you are missing crucial information from the user to proceed.
-       - If yes, determine the agent/action needed to *ask the user for clarification*. Set "isComplete": false, and crucially, set "waitForUserInput": true.
+    Follow this thought process to arrive at your decision:
+    1.  **Assess Completion:**
+        *   Carefully compare the "Original User Request" with the "Previously Executed Steps and their results."
+        *   Is the user's goal, as stated in the original request and potentially refined by the conversation, fully achieved?
+        *   If yes, set "isComplete": true. Provide a clear "reasoningTrace" explaining *why* it's complete.
 
-    Respond ONLY with a JSON object in the following format:
+    2.  **Determine Next Step (If Not Complete):**
+        *   If the request is not complete, what is the most logical, singular, and actionable next step towards fulfilling the "Overall Task Goal", while adhering to "Constraints" and "Specific Instructions"?
+        *   Consider the "Available Specialized Agents." Is there an agent specifically designed for this next step?
+            *   If yes, select that agent. Formulate a clear "action" for it.
+            *   If no specialized agent is a perfect fit, but a general action can be taken, use the "Fallback Agent" (ID: ${fallbackAgent.id}). Formulate a clear "action" for it.
+        *   Set "isComplete": false, "waitForUserInput": false. The "action" should be a directive for the chosen agent.
+
+    3.  **Identify Need for Clarification (If Not Complete and Cannot Proceed):**
+        *   If you lack critical information from the user that prevents you from taking a logical next step (even with the fallback agent), you MUST ask for clarification.
+        *   Determine what specific information is missing.
+        *   The "action" in "nextStep" should be the *exact question you need to ask the user*.
+        *   Set "isComplete": false, and crucially, set "waitForUserInput": true.
+        *   The "agentId" for asking clarification can be the "Fallback Agent" or an agent designated for user interaction if available.
+
+    Respond ONLY with a JSON object in the following structured format. Do NOT add any explanatory text outside this JSON structure:
     {
-      "nextStep": { // Include ONLY if isComplete is false. Contains the action (either progressing or asking clarification).
-        "agentId": "[ID of the agent for the next step/clarification]",
-        "action": "[Specific action OR the question to ask the user]",
-        "reason": "[Brief reason for this step/question]"
+      "nextStep": { // Include ONLY if "isComplete" is false.
+        "agentId": "[ID of the agent for the next step or for asking clarification]",
+        "action": "[If waitForUserInput is false, this is the specific, concise action for the selected agent. If waitForUserInput is true, this is the exact, polite question to ask the user.]",
+        "reason": "[Brief, one-sentence reason for choosing this specific agent and action, or for asking this specific question]"
       },
-      "isComplete": [true if the original request is fully addressed, false otherwise],
-      "waitForUserInput": [true if the previous step required more information to be completed, false otherwise],
-      "overallReason": "[Explanation for completion, next step, or why clarification is needed]"
+      "isComplete": [true if the original request is fully addressed and no further actions are needed, false otherwise],
+      "waitForUserInput": [true if you are asking the user a question to get necessary information before proceeding, false otherwise],
+      "reasoningTrace": "[A detailed step-by-step explanation of your thought process: how you evaluated completion, why you chose the next step (or decided to ask for clarification), and how it aligns with the overall goal and executed steps. Be specific.]"
     }
     $examplesSection
     """
@@ -106,7 +135,7 @@ class DirectorAgentBuilder : AgentBuilder() {
 
         return { message, conversation ->
             flow {
-                val originalRequest = conversation.originalUserRequest
+                val originalRequest = message.content
 
                 // Filter history for the prompt, excluding tool messages
                 val promptHistory = conversation.messages
@@ -118,7 +147,7 @@ class DirectorAgentBuilder : AgentBuilder() {
                     .replace("{{executed_steps}}", promptHistory)
 
                 val planningOptions = LLMOptions(
-                    systemPrompt = filledPrompt,
+                    systemPrompt = filledPrompt.trimIndent(),
                     responseFormat = "json_object",
                     temperature = 0.1
                 )
@@ -128,9 +157,9 @@ class DirectorAgentBuilder : AgentBuilder() {
 
                 try {
                     val directorResponseText = provider
-                        .generate(conversation.messages + tempMessage, planningOptions) // Use conversation messages directly
+                        .generate(conversation.messages + tempMessage, planningOptions)
                         .mapNotNull { msg ->
-                            (msg as? LLMMessage.AssistantMessage)?.also { originalLlmMessage = it } // Capture the assistant message
+                            (msg as? LLMMessage.AssistantMessage)?.also { originalLlmMessage = it }
                         }
                         .lastOrNull()?.content
 
@@ -139,21 +168,31 @@ class DirectorAgentBuilder : AgentBuilder() {
                         try {
                             val directorOutput = json.decodeFromString<DirectorOutput>(directorResponseText)
                             // Emit the structured result
-                            emit(StructuredResult(data = directorOutput, rawContent = directorResponseText, rawMessage = originalLlmMessage))
+                            emit(
+                                StructuredResult(
+                                    data = directorOutput,
+                                    rawContent = directorResponseText,
+                                    rawMessage = originalLlmMessage
+                                )
+                            )
                         } catch (e: SerializationException) {
                             // Emit an error result if parsing fails
-                            emit(ErrorResult(
-                                error = e,
-                                message = "Director agent response parsing failed: ${e.message}\nRaw Response: $directorResponseText",
-                                rawMessage = originalLlmMessage
-                            ))
+                            emit(
+                                ErrorResult(
+                                    error = e,
+                                    message = "Director agent response parsing failed: ${e.message}\nRaw Response: $directorResponseText\nExpected format: See prompt for JSON structure.",
+                                    rawMessage = originalLlmMessage
+                                )
+                            )
                         } catch (e: Exception) {
                             // Emit an error result for unexpected parsing errors
-                            emit(ErrorResult(
-                                error = e,
-                                message = "Unexpected error during director response parsing: ${e.message}",
-                                rawMessage = originalLlmMessage
-                            ))
+                            emit(
+                                ErrorResult(
+                                    error = e,
+                                    message = "Unexpected error during director response parsing: ${e.message}",
+                                    rawMessage = originalLlmMessage
+                                )
+                            )
                         }
                     } else {
                         // Emit a system result if LLM failed to generate
