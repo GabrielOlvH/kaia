@@ -13,7 +13,6 @@ data class ExecutedStep(
 data class Conversation(
     val id: String,
     val messages: MutableList<LLMMessage> = mutableListOf(),
-    var originalUserRequest: String,
     val executedSteps: MutableList<ExecutedStep> = mutableListOf(),
     val handoffs: MutableList<Handoff> = mutableListOf()
 ) {

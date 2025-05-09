@@ -8,7 +8,13 @@ import io.ktor.utils.io.*
 import kotlinx.serialization.json.JsonObject
 import kotlin.coroutines.coroutineContext
 
-
+// Define ToolError sealed interface for structured error handling
+sealed interface ToolError {
+    data class ExecutionFailed(val reason: String, val cause: Throwable? = null) : ToolError
+    object NoTenantContext : ToolError
+    data class InsufficientPermissions(val missingPermissions: Set<TenantPermission>) : ToolError
+    // Add other specific tool errors as needed
+}
 
 /**
  * Tool interface with typed parameter execution support and tenant context awareness.
@@ -43,13 +49,6 @@ class BaseTool(
     override suspend fun execute(toolCallId: String, parameters: JsonObject): Either<ToolError, ToolResult> {
         val tenantContext = coroutineContext.tenantContext()
             ?: return Either.Left(ToolError.NoTenantContext)
-
-        // Permission check: Verify if the tool is allowed for the current tenant
-        if (!tenantContext.tenant.settings.allowedTools.contains(this.name)) {
-            // Assuming ToolError.ToolNotAllowedError is defined as suggested.
-            // If not, replace with a more generic error or a specific string in ExecutionFailed.
-            return Either.Left(ToolError.ExecutionFailed("Tool '${this.name}' is not allowed for tenant '${tenantContext.tenant.id}'."))
-        }
         
 
 //         if (requiredTenantPermissions.any { it !in tenantContext.tenant.permissions }) {

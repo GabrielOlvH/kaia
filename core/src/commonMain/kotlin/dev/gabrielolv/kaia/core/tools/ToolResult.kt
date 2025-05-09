@@ -7,7 +7,6 @@ import kotlinx.serialization.json.JsonObject
 @Serializable
 data class ToolResult(
     val toolCallId: String,
-    val success: Boolean,
     val result: String,
     val metadata: JsonObject = JsonObject(emptyMap()),
     // Removed: val validationErrors: List<ValidationError> = emptyList()

@@ -10,7 +10,7 @@ data class DirectorOutput(
     val nextStep: NextStep? = null, // Nullable if isComplete is true
     val isComplete: Boolean,
     val waitForUserInput: Boolean,
-    val overallReason: String
+    val reasoningTrace: String
 )
 
 /**
@@ -19,6 +19,6 @@ data class DirectorOutput(
 @Serializable
 data class NextStep(
     val agentId: String,
-    val action: String, // Can be an action description or a question to the user
+    val action: String,
     val reason: String
 )

@@ -1,6 +1,9 @@
 package dev.gabrielolv.kaia.core.tools.builders
 
+import arrow.core.Either
+import dev.gabrielolv.kaia.core.tenant.TenantContext
 import dev.gabrielolv.kaia.core.tools.Tool
+import dev.gabrielolv.kaia.core.tools.ToolError
 import dev.gabrielolv.kaia.core.tools.ToolResult
 import dev.gabrielolv.kaia.core.tools.typed.ToolParameters
 import dev.gabrielolv.kaia.core.tools.typed.ToolParametersInstance
@@ -17,9 +20,9 @@ class TypedToolBuilder<T : ToolParameters>(
 ) {
     var name: String = ""
     var description: String = ""
-    private var executor: (suspend (ToolParametersInstance) -> ToolResult)? = null
+    private var executor: (suspend (toolCallId: String, ToolParametersInstance, tenantContext: TenantContext) -> Either<ToolError, ToolResult>)? = null
 
-    fun execute(block: suspend (ToolParametersInstance) -> ToolResult) {
+    fun execute(block: suspend (toolCallId: String, ToolParametersInstance, tenantContext: TenantContext) -> Either<ToolError, ToolResult>) {
         executor = block
     }
 
@@ -29,8 +32,8 @@ class TypedToolBuilder<T : ToolParameters>(
         require(executor != null) { "Tool executor must be specified" }
 
         return object : TypedTool<T>(name, description, paramsClass, json) {
-            override suspend fun executeTyped(parameters: ToolParametersInstance): ToolResult {
-                return executor!!.invoke(parameters)
+            override suspend fun executeTyped(toolCallId: String, parameters: ToolParametersInstance, tenantContext: TenantContext): Either<ToolError, ToolResult> {
+                return executor!!.invoke(toolCallId, parameters, tenantContext)
             }
         }
     }

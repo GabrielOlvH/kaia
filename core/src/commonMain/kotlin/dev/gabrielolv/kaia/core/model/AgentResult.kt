@@ -1,8 +1,8 @@
 package dev.gabrielolv.kaia.core.model
 
+import dev.gabrielolv.kaia.core.tools.ToolCall
 import dev.gabrielolv.kaia.core.tools.ToolResult
 import dev.gabrielolv.kaia.llm.LLMMessage
-import kotlinx.serialization.Serializable
 
 /**
  * Represents the outcome of a single step of an agent's execution.
@@ -18,7 +18,7 @@ sealed interface AgentResult {
  */
 data class TextResult(
     val content: String,
-    override val rawMessage: LLMMessage.AssistantMessage? = null // Typically from an AssistantMessage
+    override val rawMessage: LLMMessage.AssistantMessage? = null
 ) : AgentResult
 
 /**
@@ -32,15 +32,15 @@ data class TextResult(
 data class StructuredResult<T : Any>(
     val data: T,
     val rawContent: String?,
-    override val rawMessage: LLMMessage.AssistantMessage? = null // Typically from an AssistantMessage
+    override val rawMessage: LLMMessage.AssistantMessage? = null
 ) : AgentResult
 
 /**
  * Represents a request from an agent to execute one or more tools.
  */
 data class ToolCallResult(
-    val toolCalls: List<ToolCall>, // Define ToolCall appropriately
-    override val rawMessage: LLMMessage.ToolCallMessage? = null // Typically from a ToolCallMessage
+    val toolCalls: List<ToolCall>,
+    override val rawMessage: LLMMessage.ToolCallMessage? = null
 ) : AgentResult
 
 /**
@@ -48,8 +48,8 @@ data class ToolCallResult(
  * This might be used internally by the agent or orchestration logic.
  */
 data class ToolResponseResult(
-    val toolResults: List<ToolResult>, // Define ToolResult appropriately
-    override val rawMessage: LLMMessage.ToolResponseMessage? = null // Typically from a ToolResponseMessage
+    val toolResults: List<ToolResult>,
+    override val rawMessage: LLMMessage.ToolResponseMessage? = null
 ) : AgentResult
 
 /**
@@ -58,7 +58,7 @@ data class ToolResponseResult(
 data class ErrorResult(
     val error: Throwable?,
     val message: String = error?.message ?: "Agent execution failed",
-    override val rawMessage: LLMMessage? = null // Can be associated with any message or none
+    override val rawMessage: LLMMessage? = null
 ) : AgentResult
 
 /**
@@ -69,10 +69,3 @@ data class SystemResult(
     override val rawMessage: LLMMessage.SystemMessage? = null
 ) : AgentResult
 
-// Placeholder for ToolCall - Define based on your actual Tool structure
-@Serializable
-data class ToolCall(
-    val id: String,
-    val name: String,
-    val arguments: String // Keep as String (JSON) for now, consistent with current LLM messages
-)
