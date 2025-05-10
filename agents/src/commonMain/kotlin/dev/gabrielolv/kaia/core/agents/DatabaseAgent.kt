@@ -30,7 +30,6 @@ fun Agent.Companion.database(block: DatabaseAgentBuilder.() -> Unit): Agent {
 
 @OptIn(ExperimentalSerializationApi::class)
 private val json = Json {
-    namingStrategy = JsonNamingStrategy.SnakeCase
     ignoreUnknownKeys = true
     isLenient = true
 }
