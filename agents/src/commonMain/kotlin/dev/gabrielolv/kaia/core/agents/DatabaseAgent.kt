@@ -4,18 +4,17 @@ import dev.gabrielolv.kaia.core.Conversation
 import dev.gabrielolv.kaia.core.database.SqlExecutor
 import dev.gabrielolv.kaia.core.database.SqlResult
 import dev.gabrielolv.kaia.core.model.*
+import dev.gabrielolv.kaia.core.tenant.tenantContext
 import dev.gabrielolv.kaia.llm.LLMMessage
 import dev.gabrielolv.kaia.llm.LLMOptions
 import dev.gabrielolv.kaia.llm.LLMProvider
 import dev.gabrielolv.kaia.utils.GeneratedSql
 import dev.gabrielolv.kaia.utils.PreDefinedQuery
 import dev.gabrielolv.kaia.utils.PreDefinedQuerySelection
-import dev.gabrielolv.kaia.utils.QueryGenerationRule
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.isActive
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNamingStrategy
@@ -36,6 +35,43 @@ private val json = Json {
     isLenient = true
 }
 
+private const val CUSTOM_SQL_INSTRUCTIONS = """
+**Instructions for Custom SQL Generation:**
+Your goal is to construct a precise and valid SQL query based on the user's request and the provided database schema.
+
+**JSON Output Structure (GeneratedSql):**
+- `"sql_template"`: A string containing the SQL query template. Crucially, use standard JDBC placeholders (`?`) for ALL user-provided values or literals derived from the request to prevent SQL injection and ensure correctness.
+- `"parameters"`: A JSON array of objects, each containing:
+  - `"value"`: The parameter value as a JSON primitive (string, number, boolean, null). Ensure strings that look like 'null' are treated as the string "null", not the JSON `null` type unless specifically intended as a SQL NULL.
+  - `"type"`: The *intended* SQL type: "STRING", "INTEGER", "DECIMAL", "BOOLEAN", "DATE", "TIMESTAMP". This type helps the database driver handle the value correctly.
+- `"column_names"`: **Required for SELECT queries, `null` otherwise.** A JSON array of strings representing the exact column names or aliases as they will appear in the result set, in the order they are specified in the SELECT clause. If using `SELECT *`, you must list all relevant columns from the table(s) involved. This is vital for data processing.
+
+**Parameter Value Formatting:**
+- **DATE:** Must be in ISO-8601 format: "yyyy-MM-dd" (e.g., "2024-01-01").
+- **TIMESTAMP:** Must be in ISO-8601 format: "yyyy-MM-ddTHH:mm:ss" or "yyyy-MM-dd HH:mm:ss" (e.g., "2024-01-01T13:45:30").
+
+**Example (SELECT):**
+{
+  "sql_template": "SELECT id, name, age FROM users WHERE age > ? AND join_date >= ?",
+  "parameters": [
+    {"value": 18, "type": "INTEGER"},
+    {"value": "2023-01-01", "type": "DATE"}
+  ],
+  "column_names": ["id", "name", "age"]
+}
+
+**Example (INSERT):**
+{
+  "sql_template": "INSERT INTO products (name, price, created_at) VALUES (?, ?, ?)",
+  "parameters": [
+    {"value": "Super Gadget", "type": "STRING"},
+    {"value": 129.99, "type": "DECIMAL"},
+    {"value": "2024-07-15T10:00:00", "type": "TIMESTAMP"}
+  ],
+  "column_names": null
+}
+"""
+
 /**
  * Builder for creating and configuring a [DatabaseAgent].
  */
@@ -45,7 +81,7 @@ class DatabaseAgentBuilder : AgentBuilder() {
     var sqlExecutor: SqlExecutor? = null
     var schemaDescription: String? = null
     var predefinedQueries: Map<Int, PreDefinedQuery> = emptyMap()
-    var queryGenerationRule: QueryGenerationRule = QueryGenerationRule.LOOSE
+    var queryGenerationRule: QueryGenerationRule = QueryGenerationRule.STRICT_PREDEFINED_ONLY
 
     fun buildProcessor(): (LLMMessage.UserMessage, Conversation) -> Flow<AgentResult> {
         requireNotNull(provider) { "LLMProvider must be set" }
@@ -80,10 +116,10 @@ class DatabaseAgentBuilder : AgentBuilder() {
                     emit(SystemResult("Received LLM response, parsing..."))
 
                     when (queryGenerationRule) {
-                        QueryGenerationRule.UNRESTRICTED, QueryGenerationRule.LOOSE -> {
+                        QueryGenerationRule.ALLOW_CUSTOM_SQL -> {
                             generatedSql = json.decodeFromString<GeneratedSql>(responseContent)
                         }
-                        QueryGenerationRule.STRICT -> {
+                        QueryGenerationRule.STRICT_PREDEFINED_ONLY -> {
                             predefinedSelection = json.decodeFromString<PreDefinedQuerySelection>(responseContent)
                         }
                     }
@@ -110,7 +146,6 @@ class DatabaseAgentBuilder : AgentBuilder() {
                 }
 
                 if (sqlToExecute == null) {
-                    if (!currentCoroutineContext().isActive) return@flow
                     emit(ErrorResult(error = null, "Could not determine SQL to execute after parsing LLM response."))
                     return@flow
                 }
@@ -119,7 +154,14 @@ class DatabaseAgentBuilder : AgentBuilder() {
                     val finalSql = sqlToExecute.sqlTemplate
                     emit(SystemResult("Executing SQL: `$finalSql` with params: ${sqlToExecute.parameters.joinToString { it.value.toString()  }}"))
 
-                    val result = executor.execute(sqlToExecute)
+                    val tenantContext = currentCoroutineContext().tenantContext()
+
+                    if (tenantContext == null) {
+                        emit(ErrorResult(null, "Tenant context is null. Cannot execute SQL."))
+                        return@flow
+                    }
+
+                    val result = executor.execute(tenantContext, sqlToExecute)
 
                     when (result) {
                         is SqlResult.Success -> {
@@ -152,7 +194,8 @@ private fun buildPrompt(builder: DatabaseAgentBuilder): String {
 
     val predefinedQueriesText = if (predefinedQueries.isNotEmpty()) {
         """
-        **Predefined Queries (For Reference):**
+        **Predefined Queries (Available for Reference or Selection):**
+        You may use these as a basis for custom SQL if in ALLOW_CUSTOM_SQL mode, or you MUST select one if in STRICT_PREDEFINED_ONLY mode.
         ${
             predefinedQueries.entries.joinToString("\n") { (id, query) ->
                 """
@@ -173,97 +216,49 @@ private fun buildPrompt(builder: DatabaseAgentBuilder): String {
     }
 
     val modeSpecificInstructions = when (mode) {
-        QueryGenerationRule.UNRESTRICTED -> {
-            """
-            **Instructions for Custom SQL:**
-            Generate a JSON object containing:
-            - `"sql_template"`: A string containing the SQL query template. Use standard JDBC placeholders (`?`) for all user-provided values or literals derived from the request.
-            - `"parameters"`: A JSON array of objects, each containing:
-              - `"value"`: The parameter value as a JSON primitive (string, number, boolean, null). Ensure strings containing 'null' are treated as the string null, not the JSON null type unless intended.
-              - `"type"`: The *intended* SQL type: "STRING", "INTEGER", "DECIMAL", "BOOLEAN", "DATE", "TIMESTAMP".
-            - `"column_names"`: **Required for SELECT queries, null otherwise.** A JSON array of strings representing the exact column names or aliases expected in the result set, in the order they appear in the SELECT clause. Example: ["user_id", "name", "total_orders"]. If using `SELECT *`, list all relevant columns from the table(s).
-
-            For date and timestamp parameter values:
-            - DATE must be in ISO-8601 format: "yyyy-MM-dd" (e.g., "2024-01-01")
-            - TIMESTAMP must be in ISO-8601 format: "yyyy-MM-ddTHH:mm:ss" or "yyyy-MM-dd HH:mm:ss" (e.g., "2024-01-01T13:45:30")
-
-            Example (SELECT): {
-              "sql_template": "SELECT id, name, age FROM users WHERE age > ? AND join_date > ?",
-              "parameters": [
-                {"value": 18, "type": "INTEGER"},
-                {"value": "2024-01-01", "type": "DATE"}
-              ],
-              "column_names": ["id", "name", "age"]
-            }
-
-            Example (INSERT): {
-              "sql_template": "INSERT INTO products (name, price) VALUES (?, ?)",
-              "parameters": [
-                {"value": "Gadget", "type": "STRING"},
-                {"value": 99.95, "type": "DECIMAL"}
-              ],
-              "column_names": null
-            }
-            """
+        QueryGenerationRule.ALLOW_CUSTOM_SQL -> {
+            (if (predefinedQueries.isNotEmpty()) predefinedQueriesText + "\n\n" else "") +
+            CUSTOM_SQL_INSTRUCTIONS
         }
-
-        QueryGenerationRule.STRICT -> {
+        QueryGenerationRule.STRICT_PREDEFINED_ONLY -> {
             if (predefinedQueries.isEmpty()) {
-                "// STRICT mode selected, but no predefined queries are available."
+                "// CRITICAL_ERROR: STRICT_PREDEFINED_ONLY mode selected, but NO predefined queries are available. This is a configuration error. Cannot proceed."
             } else {
                 predefinedQueriesText +
-                        "\n\n**Instruction:** Select the most appropriate Query #id and provide necessary parameters based on the user request. Respond ONLY with the JSON object for PreDefinedQuerySelection: {\"queryId\": <id>, \"parameters\": [{...}]}"
+                        "\n\n**Instruction for STRICT_PREDEFINED_ONLY Mode:**\n" +
+                        "Based on the user's request, you MUST select the most appropriate Query #id from the list above. " +
+                        "Respond ONLY with the JSON object for PreDefinedQuerySelection: {\"queryId\": <id>, \"parameters\": [{...value..., ...type...}]}. " +
+                        "Ensure all required parameters for the selected query are provided."
             }
-        }
-
-        QueryGenerationRule.LOOSE -> {
-            (if (predefinedQueries.isNotEmpty()) predefinedQueriesText + "\n\n" else "") +
-                    """
-            **Instructions for Custom SQL:**
-            Generate a JSON object containing:
-            - `"sql_template"`: A string containing the SQL query template. Use standard JDBC placeholders (`?`) for all user-provided values or literals derived from the request.
-            - `"parameters"`: A JSON array of objects, each containing:
-              - `"value"`: The parameter value as a JSON primitive (string, number, boolean, null). Ensure strings containing 'null' are treated as the string null, not the JSON null type unless intended.
-              - `"type"`: The *intended* SQL type: "STRING", "INTEGER", "DECIMAL", "BOOLEAN", "DATE", "TIMESTAMP".
-            - `"column_names"`: **Required for SELECT queries, null otherwise.** A JSON array of strings representing the exact column names or aliases expected in the result set, in the order they appear in the SELECT clause. Example: ["user_id", "name", "total_orders"]. If using `SELECT *`, list all relevant columns from the table(s).
-
-            For date and timestamp parameter values:
-            - DATE must be in ISO-8601 format: "yyyy-MM-dd" (e.g., "2024-01-01")
-            - TIMESTAMP must be in ISO-8601 format: "yyyy-MM-ddTHH:mm:ss" or "yyyy-MM-dd HH:mm:ss" (e.g., "2024-01-01T13:45:30")
-
-            Example (SELECT): {
-              "sql_template": "SELECT id, name, age FROM users WHERE age > ? AND join_date > ?",
-              "parameters": [
-                {"value": 18, "type": "INTEGER"},
-                {"value": "2024-01-01", "type": "DATE"}
-              ],
-              "column_names": ["id", "name", "age"]
-            }
-
-            Example (INSERT): {
-              "sql_template": "INSERT INTO products (name, price) VALUES (?, ?)",
-              "parameters": [
-                {"value": "Gadget", "type": "STRING"},
-                {"value": 99.95, "type": "DECIMAL"}
-              ],
-              "column_names": null
-            }
-            """
         }
     }
 
     return """
-    You are an AI assistant that translates natural language questions into database queries for a $dialect database.
+    You are a highly intelligent AI assistant specializing in translating natural language questions into precise and efficient $dialect database queries.
+    Your primary goal is to generate accurate SQL or select the correct predefined query, strictly adhering to the specified output format.
+
+    **Core Task:** Analyze the user's request and the provided database schema to formulate a response.
 
     **Database Schema:**
     ```sql
     $tablesDdl
     ```
 
+    **Your Thought Process & Guidelines:**
+    1.  **Deeply Understand the Request:** Carefully parse the user's natural language question to fully grasp their intent and the specific data they are asking for.
+    2.  **Consult the Schema:** Meticulously examine the `Database Schema` provided above. Identify all relevant tables, columns, data types, and relationships necessary to fulfill the user's request.
+    3.  **Adhere to Operational Mode:**
+        *   If the mode is `ALLOW_CUSTOM_SQL`: Generate a custom SQL query. You can draw inspiration from `Predefined Queries` if they are relevant.
+        *   If the mode is `STRICT_PREDEFINED_ONLY`: You MUST select a query from the `Predefined Queries` list. Do not generate new SQL.
+    4.  **Parameterize All Values (for Custom SQL):** Crucially, if generating custom SQL, all literal values derived from the user's request (e.g., names, numbers, dates) MUST be replaced with JDBC `?` placeholders in the `sql_template`. The actual values and their types must be listed in the `parameters` array. This is essential for security and correctness.
+    5.  **Specify Column Names (for Custom SELECT SQL):** For custom `SELECT` queries, the `column_names` field in your JSON output is mandatory and must accurately list the names of the columns in the order they appear in your `SELECT` clause.
+    6.  **Match Parameter Types:** Ensure the `type` specified for each parameter in the `parameters` array accurately reflects the intended SQL data type for the corresponding `value`. Refer to `CUSTOM_SQL_INSTRUCTIONS` for type names and formatting.
+
     $modeSpecificInstructions
 
-    Analyze the user's request and the database schema.
-    Output **only** the raw JSON object representing the query (either GeneratedSql or PreDefinedQuerySelection format based on instructions), without any surrounding text, explanations, or markdown formatting.
+    CRITICAL: Your entire response MUST be ONLY the raw JSON object as specified in the instructions (either `GeneratedSql` or `PreDefinedQuerySelection` format based on the operational mode).
+    Do NOT include any other text, explanations, apologies, or markdown formatting (e.g., ```json ... ```) around the JSON object.
+    The response must be directly parsable as JSON.
     """.trimIndent()
 }
 

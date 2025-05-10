@@ -190,7 +190,7 @@ class AnthropicToolsProvider(
                 // Emit tool response message
                 val toolResponseMessage = LLMMessage.ToolResponseMessage(
                     toolCallId = toolCallId,
-                    content = result.fold({err -> err.toString()}, { result -> result.result})
+                    content = result.result
                 )
                 emitMessage(toolResponseMessage)
 
@@ -202,7 +202,7 @@ class AnthropicToolsProvider(
                             type = "tool_result",
                             toolResult = AnthropicToolResult(
                                 id = toolCallId,
-                                output = JsonPrimitive( result.fold({err -> err.toString()}, { result -> result.result}))
+                                output = JsonPrimitive(result.result)
                             )
                         )
                     )

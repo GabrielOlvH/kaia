@@ -1,5 +1,6 @@
 package dev.gabrielolv.kaia.core.database
 
+import dev.gabrielolv.kaia.core.tenant.TenantContext
 import dev.gabrielolv.kaia.utils.GeneratedSql
 
 /**
@@ -26,11 +27,13 @@ interface SqlExecutor {
     /**
      * Executes the given SQL query, potentially with parameters.
      *
+     * @param tenantContext The tenant context associated with the query.
      * @param generatedSql An object containing the SQL template, parameters, and
      *                     expected column names (required for SELECT queries).
      * @return An [SqlResult] indicating success (with data) or failure (with an error message).
      */
     suspend fun execute(
+        tenantContext: TenantContext,
         generatedSql: GeneratedSql
     ): SqlResult
 }

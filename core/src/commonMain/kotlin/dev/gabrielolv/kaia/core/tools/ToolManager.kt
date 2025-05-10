@@ -1,5 +1,7 @@
 package dev.gabrielolv.kaia.core.tools
 
+import arrow.core.Either
+import arrow.core.left
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
@@ -30,38 +32,34 @@ class ToolManager(private val json: Json = Json) {
     /**
      * Execute a tool by name with the given parameters
      */
-    suspend fun executeTool(toolCallId: String, name: String, parameters: JsonObject): ToolResult {
-        val tool = tools[name] ?: return ToolResult(
-            toolCallId = toolCallId,
-            success = false,
-            result = "Tool '$name' not found"
-        )
+    suspend fun executeTool(toolCallId: String, name: String, parameters: JsonObject): Either<ToolError, ToolResult> {
+        val tool = tools[name] ?: return Either.Left(ToolError.ExecutionFailed(
+            reason = "Tool not found: $name"
+        ))
 
-        val result = try {
+        return try {
             tool.execute(toolCallId, parameters)
         } catch (e: Exception) {
-            throw ToolExecutionFailedException(tool, parameters, null, e)
+            Either.Left(ToolError.ExecutionFailed(
+                reason = "Tool execution failed: ${e.message}",
+                cause = e
+            ))
         }
 
-        if (!result.success) {
-            throw ToolExecutionFailedException(tool, parameters, result, null)
-        }
-        return result
     }
 
     /**
      * Execute a tool from a JSON string of parameters
      */
-    suspend fun executeToolFromJson(toolCallId: String, name: String, parametersJson: String): ToolResult {
+    suspend fun executeToolFromJson(toolCallId: String, name: String, parametersJson: String): Either<ToolError, ToolResult> {
         return try {
             val parameters = json.parseToJsonElement(parametersJson).jsonObject
             executeTool(toolCallId, name, parameters)
         } catch (e: Exception) {
-            ToolResult(
-                toolCallId = toolCallId,
-                success = false,
-                result = "Invalid JSON parameters: ${e.message}"
-            )
+            Either.Left(ToolError.ExecutionFailed(
+                reason = "Failed to parse parameters JSON: ${e.message}",
+                cause = e
+            ))
         }
     }
 }
