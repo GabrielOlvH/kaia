@@ -227,7 +227,9 @@ private fun buildPrompt(builder: DatabaseAgentBuilder): String {
                 predefinedQueriesText +
                         "\n\n**Instruction for STRICT_PREDEFINED_ONLY Mode:**\n" +
                         "Based on the user's request, you MUST select the most appropriate Query #id from the list above. " +
-                        "Respond ONLY with the JSON object for PreDefinedQuerySelection: {\"queryId\": <id>, \"parameters\": [{...value..., ...type...}]}. " +
+                        "Respond ONLY with the raw JSON object representing the selected query's details directly: {\"queryId\": <id>, \"parameters\": [{\"value\": ..., \"type\": \"SQL_TYPE_IN_UPPERCASE\"}, ...]}. " +
+                        "This JSON object should directly contain 'queryId' (integer) and 'parameters' (array of objects, each with 'value' and 'type' in UPPERCASE). " +
+                        "Do NOT wrap this in any other JSON object like 'PreDefinedQuerySelection'. " +
                         "Ensure all required parameters for the selected query are provided."
             }
         }
@@ -253,10 +255,13 @@ private fun buildPrompt(builder: DatabaseAgentBuilder): String {
     4.  **Parameterize All Values (for Custom SQL):** Crucially, if generating custom SQL, all literal values derived from the user's request (e.g., names, numbers, dates) MUST be replaced with JDBC `?` placeholders in the `sql_template`. The actual values and their types must be listed in the `parameters` array. This is essential for security and correctness.
     5.  **Specify Column Names (for Custom SELECT SQL):** For custom `SELECT` queries, the `column_names` field in your JSON output is mandatory and must accurately list the names of the columns in the order they appear in your `SELECT` clause.
     6.  **Match Parameter Types:** Ensure the `type` specified for each parameter in the `parameters` array accurately reflects the intended SQL data type for the corresponding `value`. Refer to `CUSTOM_SQL_INSTRUCTIONS` for type names and formatting.
+    7.  **SQL Type Casing:** All SQL type strings used in the `type` field of the `parameters` array (e.g., for `DATE`, `VARCHAR`, `INTEGER`) MUST be in UPPERCASE.
 
     $modeSpecificInstructions
 
-    CRITICAL: Your entire response MUST be ONLY the raw JSON object as specified in the instructions (either `GeneratedSql` or `PreDefinedQuerySelection` format based on the operational mode).
+    CRITICAL: Your entire response MUST be ONLY the raw JSON object itself.
+    - If in `ALLOW_CUSTOM_SQL` mode, this will be a `GeneratedSql` object (containing `sql_template`, `parameters`, and `column_names` if applicable).
+    - If in `STRICT_PREDEFINED_ONLY` mode, this will be an object directly containing `queryId` (integer) and `parameters` (array of objects, each with `value` and `type` in UPPERCASE). Do NOT wrap this in any other JSON object.
     Do NOT include any other text, explanations, apologies, or markdown formatting (e.g., ```json ... ```) around the JSON object.
     The response must be directly parsable as JSON.
     """.trimIndent()
