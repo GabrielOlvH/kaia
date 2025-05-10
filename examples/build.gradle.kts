@@ -6,8 +6,6 @@ plugins {
 kotlin {
     // Define the targets matching :core
     jvm()
-    linuxX64()
-    mingwX64()
 
     sourceSets {
         val commonMain by getting {
@@ -43,18 +41,6 @@ kotlin {
             }
         }
 
-        // Link specific native targets directly to commonMain
-        val linuxX64Main by getting {
-            dependsOn(commonMain)
-            dependencies {
-                // implementation("io.ktor:ktor-client-curl:2.3.9") // If direct native HTTP calls needed
-            }
-        }
-        val mingwX64Main by getting {
-            dependsOn(commonMain)
-            dependencies {
-                // implementation("io.ktor:ktor-client-curl:2.3.9") // If direct native HTTP calls needed
-            }
-        }
+
     }
 }
