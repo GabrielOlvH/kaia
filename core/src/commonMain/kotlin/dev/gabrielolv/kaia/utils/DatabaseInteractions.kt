@@ -3,19 +3,71 @@ package dev.gabrielolv.kaia.utils
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonPrimitive
 
-enum class QueryGenerationRule {
-    UNRESTRICTED,
-    STRICT,
-    LOOSE,
-}
 
 enum class SqlParameterType {
+    // Text types
     STRING,
+    CHAR,
+    VARCHAR,
+    TEXT,
+    
+    // Numeric types
     INTEGER,
+    SMALLINT,
+    BIGINT,
     DECIMAL,
+    NUMERIC,
+    REAL,
+    DOUBLE,
+    
+    // Boolean type
     BOOLEAN,
+    
+    // Date/Time types
     DATE,
+    TIME,
     TIMESTAMP,
+    TIMESTAMPTZ,
+    INTERVAL,
+    
+    // Binary types
+    BYTEA,
+    
+    // Network types
+    INET,
+    CIDR,
+    MACADDR,
+    
+    // Geometric types
+    POINT,
+    LINE,
+    LSEG,
+    BOX,
+    PATH,
+    POLYGON,
+    CIRCLE,
+    
+    // JSON types
+    JSON,
+    JSONB,
+    
+    // Array type
+    ARRAY,
+    
+    // UUID type
+    UUID,
+    
+    // XML type
+    XML,
+    
+    // Money type
+    MONEY,
+    
+    // Other types
+    BIT,
+    VARBIT,
+    TSVECTOR,
+    TSQUERY,
 }
 
 @Serializable
