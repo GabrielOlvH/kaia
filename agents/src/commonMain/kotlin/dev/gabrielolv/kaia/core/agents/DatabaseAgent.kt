@@ -17,7 +17,6 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonNamingStrategy
 
 /**
  * Convenience function to create a [DatabaseAgent] using the builder pattern.
@@ -160,7 +159,7 @@ class DatabaseAgentBuilder : AgentBuilder() {
                         return@flow
                     }
 
-                    val result = executor.execute(tenantContext, sqlToExecute)
+                    val result = executor.execute(tenantContext, sqlToExecute, this)
 
                     when (result) {
                         is SqlResult.Success -> {

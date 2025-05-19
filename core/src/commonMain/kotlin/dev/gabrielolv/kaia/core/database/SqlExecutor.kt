@@ -1,7 +1,9 @@
 package dev.gabrielolv.kaia.core.database
 
+import dev.gabrielolv.kaia.core.model.AgentResult
 import dev.gabrielolv.kaia.core.tenant.TenantContext
 import dev.gabrielolv.kaia.utils.GeneratedSql
+import kotlinx.coroutines.flow.FlowCollector
 
 /**
  * Represents the result of executing an SQL query.
@@ -11,7 +13,7 @@ sealed class SqlResult {
      * Indicates successful execution, containing column headers and data rows.
      * Rows are represented as lists of nullable values.
      */
-    data class Success(val headers: List<String>, val rows: List<List<Any?>>) : SqlResult()
+    data class Success(val headers: List<String>, val rows: List<List<Any?>>, val metadata: Map<String, String>) : SqlResult()
 
     /**
      * Indicates an error occurred during execution.
@@ -34,6 +36,7 @@ interface SqlExecutor {
      */
     suspend fun execute(
         tenantContext: TenantContext,
-        generatedSql: GeneratedSql
+        generatedSql: GeneratedSql,
+        flowCollector: FlowCollector<AgentResult>
     ): SqlResult
 }

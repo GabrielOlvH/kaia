@@ -1,10 +1,11 @@
 package dev.gabrielolv.kaia.core
 
 import arrow.core.Either
+import arrow.core.left
+import arrow.core.right
 import dev.gabrielolv.kaia.core.agents.Agent
-import dev.gabrielolv.kaia.core.tenant.SingleTenantManager
+import dev.gabrielolv.kaia.core.tenant.Tenant
 import dev.gabrielolv.kaia.core.tenant.TenantContext
-import dev.gabrielolv.kaia.core.tenant.TenantManager
 import dev.gabrielolv.kaia.core.tenant.withTenantContext
 import dev.gabrielolv.kaia.core.tools.Tool
 import dev.gabrielolv.kaia.core.tools.ToolManager
@@ -13,7 +14,6 @@ import kotlinx.coroutines.flow.Flow
 
 
 sealed interface SystemError {
-    data class TenantNotFound(val tenantId: String) : SystemError
     data class ConversationOperationFailed(val message: String) : SystemError
 }
 
@@ -24,7 +24,6 @@ class KAIAgentSystemBuilder internal constructor() { // Make constructor interna
     internal val agents: MutableList<Agent> = mutableListOf() // Keep internal for helpers
     private var directorAgentId: String? = null
     private val toolManager = ToolManager()
-    internal var tenantManager: TenantManager = SingleTenantManager()
 
     /**
      * Adds a specialized agent to the system.
@@ -42,11 +41,6 @@ class KAIAgentSystemBuilder internal constructor() { // Make constructor interna
         toolManager.registerTool(tool)
     }
 
-    // Method to allow user to set a custom TenantManager
-    fun withTenantManager(manager: TenantManager): KAIAgentSystemBuilder {
-        this.tenantManager = manager
-        return this
-    }
 
     fun getAgentDatabase(): Map<String, String> {
         return agents.associate { agent -> agent.id to agent.description }
@@ -70,7 +64,7 @@ class KAIAgentSystemBuilder internal constructor() { // Make constructor interna
         val orchestrator = Orchestrator()
         agents.forEach { orchestrator.addAgent(it) }
         val handoffManager = HandoffManager(orchestrator, toolManager)
-        return KAIAgentSystem(handoffManager, designatedDirectorId, tenantManager)
+        return KAIAgentSystem(handoffManager, designatedDirectorId)
     }
 }
 
@@ -89,8 +83,7 @@ data class RunResult(
  */
 class KAIAgentSystem internal constructor(
     private val handoffManager: HandoffManager,
-    private val directorAgentId: String,
-    private val tenantManager: TenantManager // Inject TenantManager
+    private val directorAgentId: String
 ) {
 
     /**
@@ -103,13 +96,11 @@ class KAIAgentSystem internal constructor(
      * @return A RunResult containing the new conversation ID and the flow of messages for this run.
      */
     suspend fun run(
-        tenantId: String,
+        tenant: Tenant,
         initialInput: String,
         requestId: String,
         sessionId: String
     ): Either<SystemError, RunResult> {
-        val tenant = tenantManager.getTenant(tenantId) 
-            ?: return Either.Left(SystemError.TenantNotFound(tenantId))
 
         val tenantContext = TenantContext(
             tenant = tenant,
@@ -121,9 +112,9 @@ class KAIAgentSystem internal constructor(
             val conversationId = handoffManager.startConversation()
             val initialMessage = LLMMessage.UserMessage(initialInput)
             val flow = handoffManager.sendMessage(conversationId, initialMessage, directorAgentId, tenantContext)
-                ?: return@withTenantContext Either.Left(SystemError.ConversationOperationFailed("Failed to send message for newly created conversation $conversationId"))
+                ?: return@withTenantContext SystemError.ConversationOperationFailed("Failed to send message for newly created conversation $conversationId").left()
             
-            Either.Right(RunResult(conversationId, flow))
+            RunResult(conversationId, flow).right()
         }
     }
 
@@ -138,15 +129,12 @@ class KAIAgentSystem internal constructor(
      * @return A flow of messages generated in response to this specific input.
      */
     suspend fun run(
-        tenantId: String,
+        tenant: Tenant,
         conversationId: String, 
         input: String,
         requestId: String,
         sessionId: String
     ): Either<SystemError, RunResult> {
-        val tenant = tenantManager.getTenant(tenantId) 
-            ?: return arrow.core.Either.Left(SystemError.TenantNotFound(tenantId))
-
         val tenantContext = TenantContext(
             tenant = tenant,
             sessionId = sessionId,
@@ -156,9 +144,9 @@ class KAIAgentSystem internal constructor(
         return withTenantContext(tenantContext) {
             val message = LLMMessage.UserMessage(input)
             val flow = handoffManager.sendMessage(conversationId, message, directorAgentId, tenantContext)
-                ?: return@withTenantContext Either.Left(SystemError.ConversationOperationFailed("Could not find conversation $conversationId to send message."))
+                ?: return@withTenantContext SystemError.ConversationOperationFailed("Could not find conversation $conversationId to send message.").left()
             
-            Either.Right(RunResult(conversationId, flow))
+            RunResult(conversationId, flow).right()
         }
     }
 

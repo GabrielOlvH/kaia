@@ -1,15 +1,11 @@
 package dev.gabrielolv.kaia.core.tenant
 
-import io.ktor.util.date.getTimeMillis
+import io.ktor.util.date.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
 import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
-import kotlinx.serialization.Serializable
-
-// Forward declaration for optics if it were to be used, but it's not standard Kotlin.
-// For simplicity, I'll remove @optics and assume standard data classes.
-// Consider libraries like Arrow Optics if advanced lensing is needed.
 
 @Serializable
 data class Tenant(

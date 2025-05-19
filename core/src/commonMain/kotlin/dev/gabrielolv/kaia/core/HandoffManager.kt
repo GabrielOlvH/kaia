@@ -127,11 +127,11 @@ class HandoffManager(
                                 if (result.data is DirectorOutput) {
                                     directorOutput = result.data
                                     result.rawMessage?.let { emitAndStore(it) }
-                                        ?: result.rawContent?.let { emitAndStore(LLMMessage.AssistantMessage(it)) }
+                                        ?: result.rawContent?.let { emitAndStore(LLMMessage.SystemMessage(it)) }
                                 } else {
                                     emitAndStore(LLMMessage.SystemMessage("Director returned unexpected structured data type: ${result.data::class.simpleName}"))
                                     result.rawMessage?.let { conversation.append(it) }
-                                        ?: result.rawContent?.let { conversation.append(LLMMessage.AssistantMessage(it)) }
+                                        ?: result.rawContent?.let { conversation.append(LLMMessage.SystemMessage(it)) }
                                     directorFailed = true
                                 }
                             }
@@ -251,6 +251,7 @@ class HandoffManager(
                                 val errorMsgContent = "Agent Error (Step $currentStep, Agent ${agentToExecute.id}): ${agentResult.message}"
                                 val msg = LLMMessage.SystemMessage(errorMsgContent)
                                 emitAndStore(msg)
+                                emitAndStore(LLMMessage.AssistantMessage("There was an issue with your request. Please try again"))
                                 executedStepRecord.error = agentResult.message
                                 stepFailed = true
                                 // Don't break collect, let agent finish if it can, but mark step as failed
