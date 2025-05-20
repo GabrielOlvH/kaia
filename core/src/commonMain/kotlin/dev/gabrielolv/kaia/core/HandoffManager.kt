@@ -172,10 +172,7 @@ class HandoffManager(
 
             emitAndStore(LLMMessage.SystemMessage("Director decision: ${directorOutput.reasoningTrace}"))
 
-            if (directorOutput.isComplete) {
-                emitAndStore(LLMMessage.SystemMessage("Director indicates task is complete."))
-                break
-            }
+
 
             val nextStepInfo = directorOutput.nextStep
             if (nextStepInfo == null) {
@@ -269,15 +266,9 @@ class HandoffManager(
                                             .onRight { toolResult ->
                                                 val resultMsgContent = "Tool Result (${toolCall.name}): ${toolResult.result}"
                                                 val toolResponseMsg = LLMMessage.SystemMessage(resultMsgContent)
-                                                emitAndStore(toolResponseMsg) // Send result back
                                                 executedStepRecord.messages.add(toolResponseMsg) // Log result
-
-                                                conversation.append(
-                                                    LLMMessage.ToolResponseMessage(
-                                                        toolCall.id,
-                                                        toolResult.result
-                                                    )
-                                                )
+                                                val toolOutputMsg = LLMMessage.ToolResponseMessage(toolCall.id, toolResult.result)
+                                                emitAndStore(toolOutputMsg)
                                             }.onLeft { error ->
                                                 val toolErrorMsg =
                                                     LLMMessage.SystemMessage("Tool execution failed for ${toolCall.name}: $error")
@@ -357,8 +348,12 @@ class HandoffManager(
                 emitAndStore(LLMMessage.SystemMessage("Halting execution due to unhandled exception in step $currentStep."))
                 break // Exit the loop on failure
             }
-            if (directorOutput!!.waitForUserInput) {
+            if (directorOutput.waitForUserInput) {
                 emitAndStore(LLMMessage.SystemMessage("Director indicates task requires user input."))
+                break
+            }
+            if (directorOutput.isComplete) {
+                emitAndStore(LLMMessage.SystemMessage("Director indicates task is complete."))
                 break
             }
         } // End while loop
@@ -370,6 +365,33 @@ class HandoffManager(
 
     suspend fun getHistory(conversationId: String): List<LLMMessage>? {
         return lock.withLock { conversations[conversationId]?.messages?.toList() }
+    }
+
+    /**
+     * Loads conversation history into an existing conversation.
+     * If the conversation doesn't exist, it will be created.
+     *
+     * @param conversationId The ID of the conversation to load history into.
+     * @param messages The list of messages to load as history.
+     * @return True if the history was successfully loaded, false otherwise.
+     */
+    suspend fun loadConversationHistory(
+        conversationId: String,
+        messages: List<LLMMessage>
+    ): Boolean {
+        return lock.withLock {
+            val conversation = conversations[conversationId] ?: Conversation(id = conversationId).also {
+                conversations[conversationId] = it
+            }
+            
+            // Clear existing messages if any
+            conversation.messages.clear()
+            
+            // Add all provided messages
+            conversation.messages.addAll(messages)
+            
+            true
+        }
     }
 
     suspend fun getHandoffs(conversationId: String): List<Handoff>? {

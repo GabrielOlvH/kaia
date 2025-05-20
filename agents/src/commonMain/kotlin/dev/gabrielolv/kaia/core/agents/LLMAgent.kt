@@ -1,10 +1,9 @@
 package dev.gabrielolv.kaia.core.agents
 
 import dev.gabrielolv.kaia.core.Conversation
-import dev.gabrielolv.kaia.core.model.AgentResult
-import dev.gabrielolv.kaia.core.model.ErrorResult
-import dev.gabrielolv.kaia.core.model.SystemResult
-import dev.gabrielolv.kaia.core.model.TextResult
+import dev.gabrielolv.kaia.core.model.*
+import dev.gabrielolv.kaia.core.tools.ToolCall
+import dev.gabrielolv.kaia.core.tools.ToolResult
 import dev.gabrielolv.kaia.llm.LLMMessage
 import dev.gabrielolv.kaia.llm.LLMOptions
 import dev.gabrielolv.kaia.llm.LLMProvider
@@ -50,7 +49,24 @@ private fun LLMAgentBuilder.buildProcessor(): (LLMMessage.UserMessage, Conversat
                 when (llmMessage) {
                     is LLMMessage.AssistantMessage -> TextResult(content = llmMessage.content, rawMessage = llmMessage)
                     is LLMMessage.SystemMessage -> SystemResult(message = llmMessage.content, rawMessage = llmMessage)
-                    else -> ErrorResult(error = null, message = "Received unexpected message type from LLM: ${llmMessage::class.simpleName}", rawMessage = llmMessage)
+                    is LLMMessage.ToolCallMessage -> ToolCallResult(
+                        toolCalls = listOf(ToolCall(id = llmMessage.toolCallId, name = llmMessage.name, arguments = llmMessage.arguments) ), rawMessage = llmMessage
+                    )
+
+                    is LLMMessage.ToolResponseMessage -> ToolResponseResult(
+                        toolResults = listOf(
+                            ToolResult(
+                                llmMessage.toolCallId,
+                                llmMessage.content
+                            )
+                        ), rawMessage = llmMessage
+                    )
+
+                    else -> ErrorResult(
+                        error = null,
+                        message = "Unexpected message type: ${llmMessage::class.simpleName}",
+                        rawMessage = llmMessage
+                    )
                 }
             }
             .catch { e ->

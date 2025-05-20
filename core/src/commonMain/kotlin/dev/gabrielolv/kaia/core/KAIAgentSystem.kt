@@ -150,6 +150,83 @@ class KAIAgentSystem internal constructor(
         }
     }
 
+    /**
+     * Loads conversation history into a new or existing conversation.
+     *
+     * @param tenant The tenant.
+     * @param conversationId The ID of the conversation to load history into.
+     * @param messages The list of messages to load as history.
+     * @param requestId The ID of the request.
+     * @param sessionId The ID of the session.
+     * @return Either an error or the conversation ID where history was loaded.
+     */
+    suspend fun loadConversationHistory(
+        tenant: Tenant,
+        conversationId: String,
+        messages: List<LLMMessage>,
+        requestId: String,
+        sessionId: String
+    ): Either<SystemError, String> {
+        val tenantContext = TenantContext(
+            tenant = tenant,
+            sessionId = sessionId,
+            requestId = requestId
+        )
+
+        return withTenantContext(tenantContext) {
+            val success = handoffManager.loadConversationHistory(conversationId, messages)
+            if (success) {
+                conversationId.right()
+            } else {
+                SystemError.ConversationOperationFailed("Failed to load history for conversation $conversationId").left()
+            }
+        }
+    }
+
+    /**
+     * Creates a new conversation with preloaded history and then processes the initial input.
+     *
+     * @param tenant The tenant.
+     * @param initialInput The first message from the user to process after loading history.
+     * @param history The list of messages to preload as conversation history.
+     * @param requestId The ID of the request.
+     * @param sessionId The ID of the session.
+     * @param conversationId Optional ID for the new conversation. If not provided, a new ID will be generated.
+     * @return Either an error or a RunResult containing the conversation ID and message flow.
+     */
+    suspend fun runWithHistory(
+        tenant: Tenant,
+        initialInput: String,
+        history: List<LLMMessage>,
+        requestId: String,
+        sessionId: String,
+        conversationId: String? = null
+    ): Either<SystemError, RunResult> {
+        val tenantContext = TenantContext(
+            tenant = tenant,
+            sessionId = sessionId,
+            requestId = requestId
+        )
+
+        return withTenantContext(tenantContext) {
+            // Create a new conversation or use the provided ID
+            val newConversationId = conversationId ?: handoffManager.startConversation()
+            
+            // Load the history
+            val success = handoffManager.loadConversationHistory(newConversationId, history)
+            if (!success) {
+                return@withTenantContext SystemError.ConversationOperationFailed("Failed to load history for new conversation $newConversationId").left()
+            }
+            
+            // Process the initial input
+            val message = LLMMessage.UserMessage(initialInput)
+            val flow = handoffManager.sendMessage(newConversationId, message, directorAgentId, tenantContext)
+                ?: return@withTenantContext SystemError.ConversationOperationFailed("Failed to send message for conversation with loaded history $newConversationId").left()
+            
+            RunResult(newConversationId, flow).right()
+        }
+    }
+
     companion object {
         fun build(block: KAIAgentSystemBuilder.() -> Unit): KAIAgentSystem {
             return KAIAgentSystemBuilder().apply(block).build()
