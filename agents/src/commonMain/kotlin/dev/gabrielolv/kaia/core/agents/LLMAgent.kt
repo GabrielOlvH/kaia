@@ -10,6 +10,7 @@ import dev.gabrielolv.kaia.llm.LLMProvider
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.json.Json
 
 /**
  * Creates an agent that uses an LLM provider to generate responses.
@@ -50,7 +51,7 @@ private fun LLMAgentBuilder.buildProcessor(): (LLMMessage.UserMessage, Conversat
                     is LLMMessage.AssistantMessage -> TextResult(content = llmMessage.content, rawMessage = llmMessage)
                     is LLMMessage.SystemMessage -> SystemResult(message = llmMessage.content, rawMessage = llmMessage)
                     is LLMMessage.ToolCallMessage -> ToolCallResult(
-                        toolCalls = listOf(ToolCall(id = llmMessage.toolCallId, name = llmMessage.name, arguments = llmMessage.arguments) ), rawMessage = llmMessage
+                        toolCalls = listOf(ToolCall(id = llmMessage.toolCallId, name = llmMessage.name, arguments = Json.encodeToString(llmMessage.arguments)) ), rawMessage = llmMessage
                     )
 
                     is LLMMessage.ToolResponseMessage -> ToolResponseResult(
