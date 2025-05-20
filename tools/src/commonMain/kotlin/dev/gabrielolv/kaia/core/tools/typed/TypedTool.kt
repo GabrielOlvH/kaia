@@ -1,18 +1,16 @@
 package dev.gabrielolv.kaia.core.tools.typed
 
-import dev.gabrielolv.kaia.core.tools.Tool
-import dev.gabrielolv.kaia.core.tools.ToolResult
-import dev.gabrielolv.kaia.core.tools.ToolError
-import dev.gabrielolv.kaia.core.tenant.TenantContext
-import dev.gabrielolv.kaia.core.tenant.TenantPermission
-import dev.gabrielolv.kaia.core.tenant.tenantContext
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlin.reflect.KClass
-import kotlin.coroutines.coroutineContext
 import arrow.core.Either
 import arrow.core.left
-import arrow.core.right
+import dev.gabrielolv.kaia.core.tenant.TenantContext
+import dev.gabrielolv.kaia.core.tenant.tenantContext
+import dev.gabrielolv.kaia.core.tools.Tool
+import dev.gabrielolv.kaia.core.tools.ToolError
+import dev.gabrielolv.kaia.core.tools.ToolResult
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlin.coroutines.coroutineContext
+import kotlin.reflect.KClass
 
 /**
  * Enhanced implementation of Tool with typed parameters, auto schema generation, and tenant context awareness.
@@ -44,7 +42,7 @@ abstract class TypedTool<T : ToolParameters>(
             ?: return ToolError.NoTenantContext.left()
 
         // Permission check: Verify if the tool is allowed for the current tenant
-        if (!tenantContext.tenant.settings.allowedTools.contains(this.name)) {
+        if (!tenantContext.tenant.settings.canUseTool(this.name)) {
             // Assuming ToolError.ToolNotAllowedError is defined as suggested.
             // If not, replace with a more generic error or a specific string in ExecutionFailed.
             return ToolError.ExecutionFailed("Tool '${this.name}' is not allowed for tenant '${tenantContext.tenant.id}'.").left()
