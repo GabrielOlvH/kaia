@@ -2,12 +2,10 @@ package dev.gabrielolv.kaia.core.tools
 
 import arrow.core.Either
 import dev.gabrielolv.kaia.core.tenant.TenantContext
-import dev.gabrielolv.kaia.core.tenant.TenantPermission
 import dev.gabrielolv.kaia.core.tenant.tenantContext
 import io.ktor.utils.io.*
 import kotlinx.serialization.json.JsonObject
 import kotlin.coroutines.coroutineContext
-
 
 
 /**
@@ -45,7 +43,7 @@ class BaseTool(
             ?: return Either.Left(ToolError.NoTenantContext)
 
         // Permission check: Verify if the tool is allowed for the current tenant
-        if (!tenantContext.tenant.settings.allowedTools.contains(this.name)) {
+        if (!tenantContext.tenant.settings.canUseTool(this.name)) {
             // Assuming ToolError.ToolNotAllowedError is defined as suggested.
             // If not, replace with a more generic error or a specific string in ExecutionFailed.
             return Either.Left(ToolError.ExecutionFailed("Tool '${this.name}' is not allowed for tenant '${tenantContext.tenant.id}'."))

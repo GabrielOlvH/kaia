@@ -20,7 +20,7 @@ data class Tenant(
 @Serializable
 data class TenantSettings(
     val maxConcurrentConversations: Int = 100,
-    val allowedTools: Set<String> = emptySet(),
+    val canUseTool: (String) -> Boolean,
     // val rateLimits: RateLimits = RateLimits(), // Assuming RateLimits is defined elsewhere or simplified
     val customConfig: Map<String, String> = emptyMap()
 )
