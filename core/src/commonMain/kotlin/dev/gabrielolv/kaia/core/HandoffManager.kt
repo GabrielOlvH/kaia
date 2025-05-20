@@ -255,53 +255,53 @@ class HandoffManager(
                             }
                             is ToolCallResult -> {
                                 toolCallMade = true
-                                agentResult.toolCalls.forEach { toolCall ->
-                                    val toolMsg =
-                                        LLMMessage.SystemMessage("Step $currentStep: Agent requests tool call: ${toolCall.name} with args: ${toolCall.arguments}")
-                                    emitAndStore(toolMsg) // Inform client
-                                    executedStepRecord.messages.add(toolMsg) // Log to step
-
-                                    try {
-                                        toolManager.executeToolFromJson(toolCall.id, toolCall.name, toolCall.arguments)
-                                            .onRight { toolResult ->
-                                                val resultMsgContent = "Tool Result (${toolCall.name}): ${toolResult.result}"
-                                                val toolResponseMsg = LLMMessage.SystemMessage(resultMsgContent)
-                                                executedStepRecord.messages.add(toolResponseMsg) // Log result
-                                                val toolOutputMsg = LLMMessage.ToolResponseMessage(toolCall.id, toolResult.result)
-                                                emitAndStore(toolOutputMsg)
-                                            }.onLeft { error ->
-                                                val toolErrorMsg =
-                                                    LLMMessage.SystemMessage("Tool execution failed for ${toolCall.name}: $error")
-                                                emitAndStore(toolErrorMsg)
-                                                executedStepRecord.messages.add(toolErrorMsg)
-                                                executedStepRecord.error = "Tool exception: $error"
-
-                                                executedStepRecord.error = "Tool failed: $error"
-                                                conversation.append(
-                                                    LLMMessage.ToolResponseMessage(
-                                                        toolCall.id,
-                                                        "Execution Error: $error"
-                                                    )
-                                                )
-                                                stepFailed = true // Mark step as failed if tool fails
-                                            }
-
-
-                                    } catch (e: Exception) {
-                                        val toolErrorMsg =
-                                            LLMMessage.SystemMessage("Unexpected error during tool execution for ${toolCall.name}: ${e.message}")
-                                        emitAndStore(toolErrorMsg)
-                                        executedStepRecord.messages.add(toolErrorMsg)
-                                        executedStepRecord.error = "Unexpected tool error: ${e.message}"
-                                        conversation.append(
-                                            LLMMessage.ToolResponseMessage(
-                                                toolCall.id,
-                                                "Unexpected Error: ${e.message}"
-                                            )
-                                        )
-                                        stepFailed = true
-                                    }
-                                }
+//                                agentResult.toolCalls.forEach { toolCall ->
+//                                    val toolMsg =
+//                                        LLMMessage.SystemMessage("Step $currentStep: Agent requests tool call: ${toolCall.name} with args: ${toolCall.arguments}")
+//                                    emitAndStore(toolMsg) // Inform client
+//                                    executedStepRecord.messages.add(toolMsg) // Log to step
+//
+//                                    try {
+//                                        toolManager.executeToolFromJson(toolCall.id, toolCall.name, toolCall.arguments)
+//                                            .onRight { toolResult ->
+//                                                val resultMsgContent = "Tool Result (${toolCall.name}): ${toolResult.result}"
+//                                                val toolResponseMsg = LLMMessage.SystemMessage(resultMsgContent)
+//                                                executedStepRecord.messages.add(toolResponseMsg) // Log result
+//                                                val toolOutputMsg = LLMMessage.ToolResponseMessage(toolCall.id, toolResult.result)
+//                                                emitAndStore(toolOutputMsg)
+//                                            }.onLeft { error ->
+//                                                val toolErrorMsg =
+//                                                    LLMMessage.SystemMessage("Tool execution failed for ${toolCall.name}: $error")
+//                                                emitAndStore(toolErrorMsg)
+//                                                executedStepRecord.messages.add(toolErrorMsg)
+//                                                executedStepRecord.error = "Tool exception: $error"
+//
+//                                                executedStepRecord.error = "Tool failed: $error"
+//                                                conversation.append(
+//                                                    LLMMessage.ToolResponseMessage(
+//                                                        toolCall.id,
+//                                                        "Execution Error: $error"
+//                                                    )
+//                                                )
+//                                                stepFailed = true // Mark step as failed if tool fails
+//                                            }
+//
+//
+//                                    } catch (e: Exception) {
+//                                        val toolErrorMsg =
+//                                            LLMMessage.SystemMessage("Unexpected error during tool execution for ${toolCall.name}: ${e.message}")
+//                                        emitAndStore(toolErrorMsg)
+//                                        executedStepRecord.messages.add(toolErrorMsg)
+//                                        executedStepRecord.error = "Unexpected tool error: ${e.message}"
+//                                        conversation.append(
+//                                            LLMMessage.ToolResponseMessage(
+//                                                toolCall.id,
+//                                                "Unexpected Error: ${e.message}"
+//                                            )
+//                                        )
+//                                        stepFailed = true
+//                                    }
+//                                }
                             }
                             is ToolResponseResult -> {
                                 agentResult.toolResults.forEach { toolResult ->
