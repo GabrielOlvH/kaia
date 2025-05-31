@@ -126,12 +126,10 @@ class HandoffManager(
                             is StructuredResult<*> -> {
                                 if (result.data is DirectorOutput) {
                                     directorOutput = result.data
-                                    result.rawMessage?.let { emitAndStore(it) }
-                                        ?: result.rawContent?.let { emitAndStore(LLMMessage.SystemMessage(it)) }
+                                    result.rawContent?.let { emitAndStore(LLMMessage.SystemMessage(it)) }
                                 } else {
                                     emitAndStore(LLMMessage.SystemMessage("Director returned unexpected structured data type: ${result.data::class.simpleName}"))
-                                    result.rawMessage?.let { conversation.append(it) }
-                                        ?: result.rawContent?.let { conversation.append(LLMMessage.SystemMessage(it)) }
+                                    result.rawContent?.let { conversation.append(LLMMessage.SystemMessage(it)) }
                                     directorFailed = true
                                 }
                             }
