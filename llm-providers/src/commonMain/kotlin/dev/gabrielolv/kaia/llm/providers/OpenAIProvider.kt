@@ -6,6 +6,7 @@ import dev.gabrielolv.kaia.llm.LLMProvider
 import dev.gabrielolv.kaia.utils.createHttpEngine
 import io.ktor.client.*
 import io.ktor.client.call.*
+import io.ktor.client.plugins.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.http.*
@@ -17,11 +18,14 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNamingStrategy
 import kotlinx.serialization.json.encodeToJsonElement
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 internal class OpenAIProvider(
     private val apiKey: String,
     private val baseUrl: String,
-    private val model: String
+    private val model: String,
+    private val timeout: Duration = 10.seconds
 ) : LLMProvider {
     @OptIn(ExperimentalSerializationApi::class)
     val json = Json {
@@ -148,6 +152,9 @@ internal class OpenAIProvider(
                 contentType(ContentType.Application.Json)
                 header("Authorization", "Bearer $apiKey")
                 setBody(request)
+                timeout {
+                    requestTimeoutMillis = timeout.inWholeMilliseconds
+                }
             }.body()
         } catch (e: Exception) {
             // Handle API errors gracefully

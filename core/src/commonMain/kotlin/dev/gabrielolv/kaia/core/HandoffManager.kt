@@ -145,7 +145,7 @@ class HandoffManager(
                                 result.rawMessage?.let { conversation.append(it) }
                             }
                             is TextResult -> {
-                                emitAndStore(LLMMessage.AssistantMessage(result.content))
+                                emitAndStore(LLMMessage.SystemMessage(result.content))
                                 result.rawMessage?.let { conversation.append(it) }
                             }
                             is ToolCallResult, is ToolResponseResult -> {

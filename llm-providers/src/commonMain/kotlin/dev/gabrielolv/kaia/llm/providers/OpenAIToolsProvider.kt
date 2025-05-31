@@ -7,6 +7,7 @@ import dev.gabrielolv.kaia.llm.LLMProvider
 import dev.gabrielolv.kaia.utils.createHttpEngine
 import io.ktor.client.*
 import io.ktor.client.call.*
+import io.ktor.client.plugins.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.http.*
@@ -18,6 +19,8 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * LLM provider with tool calling capabilities that supports chained tool calls
@@ -27,7 +30,8 @@ class OpenAIToolsProvider(
     private val apiKey: String,
     private val baseUrl: String = "https://api.openai.com/v1",
     private val model: String = "gpt-4-turbo",
-    private val toolManager: ToolManager
+    private val toolManager: ToolManager,
+    private val timeout: Duration = 10.seconds
 ) : LLMProvider {
     @OptIn(ExperimentalSerializationApi::class)
     private val json = Json {
@@ -134,6 +138,7 @@ class OpenAIToolsProvider(
         return httpClient.post("$baseUrl/chat/completions") {
             contentType(ContentType.Application.Json)
             header("Authorization", "Bearer $apiKey")
+            timeout { requestTimeoutMillis = timeout.inWholeMilliseconds }
             setBody(request)
         }.body()
     }

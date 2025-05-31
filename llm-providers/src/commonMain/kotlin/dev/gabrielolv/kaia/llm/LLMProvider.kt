@@ -3,6 +3,8 @@ package dev.gabrielolv.kaia.llm
 import dev.gabrielolv.kaia.core.tools.ToolManager
 import dev.gabrielolv.kaia.llm.providers.*
 import kotlinx.coroutines.flow.Flow
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 interface LLMProvider {
     /**
@@ -24,13 +26,15 @@ interface LLMProvider {
             apiKey: String,
             baseUrl: String = "https://api.openai.com/v1",
             model: String = "gpt-4-turbo",
-            toolManager: ToolManager? = null
+            toolManager: ToolManager? = null,
+            timeout: Duration = 30.seconds
         ): LLMProvider = if (toolManager != null) OpenAIToolsProvider(
             apiKey,
             baseUrl,
             model,
-            toolManager
-        ) else OpenAIProvider(apiKey, baseUrl, model)
+            toolManager,
+            timeout
+        ) else OpenAIProvider(apiKey, baseUrl, model, timeout)
 
         /**
          * Create a Gemini provider.
